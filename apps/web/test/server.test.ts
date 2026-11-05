@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { buildDemoWorld } from "@px/demo";
 import { buildOrderPreview } from "../src/server/order-preview.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { cents, formatEuro, parseCentsString } from "../src/money.ts";
 import { applySettledFill, commissionOnGross, EMPTY_ACCUMULATOR, sellPreview } from "../src/commission.ts";

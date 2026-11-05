@@ -56,7 +56,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <div className="flex">
-        <nav aria-label="Hoofdnavigatie" className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-56 shrink-0 flex-col gap-1 bg-navy p-3 md:flex">
+        <div className="hidden w-56 shrink-0 bg-navy md:block">
+        <nav aria-label="Hoofdnavigatie" className="sticky top-16 flex flex-col gap-1 p-3">
           <NavLink href="/" variant="side"><IconHome />Overzicht</NavLink>
           <NavLink href="/markt" variant="side"><IconMarket />Markt</NavLink>
           <NavLink href="/uitgiftes" variant="side"><IconLayers />Uitgiftes</NavLink>
@@ -65,6 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NavLink href="/account" variant="side"><IconUser />Account</NavLink>
           {hasAdminRole(user) && <NavLink href="/beheer" variant="side"><IconShield />Beheer</NavLink>}
         </nav>
+        </div>
         <main className="min-w-0 flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">{children}</main>
       </div>
 

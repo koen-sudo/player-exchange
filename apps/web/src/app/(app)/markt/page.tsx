@@ -109,31 +109,32 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
                 <table className="w-full text-sm">
                   <thead className="border-b border-line bg-slate-50 text-left text-muted">
                     <tr>
-                      <th className="px-4 py-3 font-medium">{sortLink("name", "Speler")}</th>
-                      <th className="px-4 py-3 text-right font-medium">{sortLink("reference", "Referentiewaarde")}</th>
-                      <th className="px-4 py-3 text-right font-medium">{sortLink("change", "Wijziging")}</th>
-                      <th className="px-4 py-3 text-right font-medium">{sortLink("bid", "Hoogste bod")}</th>
-                      <th className="px-4 py-3 text-right font-medium">{sortLink("ask", "Laagste vraag")}</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-3 py-3 font-medium">{sortLink("name", "Speler")}</th>
+                      <th className="px-3 py-3 text-right font-medium">{sortLink("reference", "Referentiewaarde")}</th>
+                      <th className="px-3 py-3 text-right font-medium">{sortLink("change", "Wijziging")}</th>
+                      <th className="px-3 py-3 text-right font-medium">{sortLink("bid", "Hoogste bod")}</th>
+                      <th className="px-3 py-3 text-right font-medium">{sortLink("ask", "Laagste vraag")}</th>
+                      <th className="px-3 py-3 font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {result.rows.map((r) => (
                       <tr key={r.playerId} className={selectedId === r.playerId ? "bg-primary-soft/60" : "hover:bg-slate-50"}>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <Link href={withPlayer(marketHref(filter, {}), r.playerId)} className="flex items-center gap-3" scroll={false}>
                             <Avatar initials={r.initials} />
                             <span>
-                              <span className="block font-semibold">{r.name}</span>
-                              <span className="block text-xs text-muted">{r.team} · {r.competition} · {r.role}</span>
+                              <span className="block whitespace-nowrap font-semibold">{r.name}</span>
+                              <span className="block whitespace-nowrap text-xs text-muted">{r.team} · {r.competition}</span>
+                              <span className="block whitespace-nowrap text-xs text-muted">{r.role}</span>
                             </span>
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-right"><Money cents={r.reference} /></td>
-                        <td className="px-4 py-3 text-right"><Change cents={r.change} /></td>
-                        <td className="px-4 py-3 text-right">{r.status === "OPEN" ? (r.bestBid === null ? <span className="text-muted">Geen actueel bod</span> : <Money cents={r.bestBid} />) : <span className="text-muted">—</span>}</td>
-                        <td className="px-4 py-3 text-right">{r.status === "OPEN" ? (r.bestAsk === null ? <span className="text-muted">Geen actuele vraag</span> : <Money cents={r.bestAsk} />) : <span className="text-muted">—</span>}</td>
-                        <td className="px-4 py-3">
+                        <td className="whitespace-nowrap px-3 py-3 text-right"><Money cents={r.reference} /></td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right">{r.change === null ? <span className="text-muted" title="Niet beschikbaar">—<span className="sr-only">Niet beschikbaar</span></span> : <Change cents={r.change} />}</td>
+                        <td className="px-3 py-3 text-right">{r.status === "OPEN" ? (r.bestBid === null ? <span className="text-muted">Geen actueel bod</span> : <Money cents={r.bestBid} />) : <span className="text-muted">—</span>}</td>
+                        <td className="px-3 py-3 text-right">{r.status === "OPEN" ? (r.bestAsk === null ? <span className="text-muted">Geen actuele vraag</span> : <Money cents={r.bestAsk} />) : <span className="text-muted">—</span>}</td>
+                        <td className="px-3 py-3">
                           <span className="flex flex-wrap gap-1">
                             <Pill tone={r.status === "OPEN" ? "green" : "grey"}>{r.statusLabel}</Pill>
                             <DataQualityBadge quality={r.dataQuality} />

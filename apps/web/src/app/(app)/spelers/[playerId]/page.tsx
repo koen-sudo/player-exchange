@@ -55,8 +55,8 @@ export default async function PlayerPage({ params, searchParams }: Props) {
                 </div>
               </div>
             </div>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-4">
-              <div className="rounded-lg bg-primary-soft p-3 sm:col-span-1">
+            <dl className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4">
+              <div className="col-span-3 rounded-lg bg-primary-soft p-3 sm:col-span-1">
                 <dt className="text-sm font-medium">Referentiewaarde</dt>
                 <dd className="text-2xl font-bold"><Money cents={ref?.amount} /></dd>
                 <dd className="text-xs text-muted">
@@ -82,6 +82,12 @@ export default async function PlayerPage({ params, searchParams }: Props) {
                 <dd className="text-xl font-semibold">{d.bestAsk === null ? <span className="text-base text-muted">Geen actuele vraag</span> : <Money cents={d.bestAsk} />}</dd>
               </div>
             </dl>
+            {d.canTrade && (
+              <div className="mt-4 grid grid-cols-2 gap-3 xl:hidden">
+                <a href="#handelen" className="rounded-lg bg-primary py-2.5 text-center font-semibold text-white">Kopen</a>
+                <a href="#handelen" className="rounded-lg border border-slate-300 py-2.5 text-center font-medium">Verkopen</a>
+              </div>
+            )}
           </section>
 
           <nav aria-label="Spelersonderdelen" className="grid grid-cols-4 overflow-hidden rounded-lg border border-line bg-white text-center text-sm">
@@ -134,7 +140,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
         </div>
 
         <div className="space-y-5">
-          <section className="rounded-xl border border-line bg-white">
+          <section id="handelen" className="scroll-mt-24 rounded-xl border border-line bg-white">
             <div className="rounded-t-xl bg-navy px-4 py-3 font-semibold text-white">Handelen in {d.name}</div>
             <div className="p-4">
               {d.canTrade ? (

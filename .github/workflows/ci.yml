@@ -38,8 +38,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Domein- en server-tests
-        run: pnpm test:domain
+      - name: Unit- en integratietests (Vitest)
+        run: pnpm test
       - name: Database-constrainttests
         run: pnpm test:db
       - name: Typecheck

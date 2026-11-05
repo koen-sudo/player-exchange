@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { buildDemoWorld } from "../src/world.ts";
 import { listDrops, listMarket, ordersFor, playerDetail, portfolio } from "../src/queries.ts";

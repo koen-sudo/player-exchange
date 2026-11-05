@@ -157,7 +157,8 @@ export function OrderTicket(props: OrderTicketProps) {
               <dl className="divide-y divide-line rounded-lg border border-line text-sm">
                 <Row k="Aantal" v={`${preview.quantity} ${preview.quantity === 1 ? "kaart" : "kaarten"}`} />
                 <Row k={preview.side === "BUY" ? "Maximale prijs per kaart" : "Minimale prijs per kaart"} v={euroFromMinor(preview.limitPriceMinor)} />
-                <Row k="Orderduur" v={`${TIF_LABELS[preview.timeInForce]} (tot ${dateTime(preview.expiresAtIfAcceptedNow)} bij plaatsing nu)`} />
+                <Row k="Orderduur" v={TIF_LABELS[preview.timeInForce]} />
+                <Row k="Verloopt bij plaatsing nu" v={dateTime(preview.expiresAtIfAcceptedNow)} />
                 {preview.side === "BUY" ? (
                   <>
                     <Row k="Beste verkoopprijs nu" v={preview.bestAskMinor ? euroFromMinor(String(preview.bestAskMinor)) : "Geen actuele vraag"} />
@@ -195,7 +196,7 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
   return (
     <div className={`flex justify-between gap-4 px-3 py-2 ${strong ? "bg-primary-soft font-semibold" : ""}`}>
       <dt>{k}</dt>
-      <dd className="num text-right">{v}</dd>
+      <dd className="text-right tabular-nums">{v}</dd>
     </div>
   );
 }

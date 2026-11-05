@@ -111,9 +111,9 @@ export default async function PortfolioPage() {
           {orders.length === 0 ? <p className="text-sm text-muted">Geen openstaande orders.</p> : (
             <ul className="divide-y divide-line text-sm">
               {orders.map((o) => (
-                <li key={o.id} className="flex flex-wrap items-center gap-3 py-2">
+                <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                   <Avatar initials={o.initials} size="sm" />
-                  <span className="min-w-0 flex-1 font-medium">{o.playerName}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{o.playerName}</span>
                   <Pill tone={o.side === "BUY" ? "green" : "blue"}>{o.side === "BUY" ? "Kopen" : "Verkopen"}</Pill>
                   <span className="num">{o.qty.open} × {euro(o.limitPriceCents)}</span>
                   <Pill tone="green">{o.statusLabel}</Pill>
@@ -129,9 +129,11 @@ export default async function PortfolioPage() {
           {tx.length === 0 ? <p className="text-sm text-muted">Nog geen transacties.</p> : (
             <ul className="divide-y divide-line text-sm">
               {tx.map((t) => (
-                <li key={t.id} className="flex flex-wrap items-center gap-3 py-2">
-                  <span className="w-24 text-muted">{dateOnly(t.at)}</span>
-                  <span className="min-w-0 flex-1 font-medium">{t.player.displayName}</span>
+                <li key={t.id} className="flex items-center gap-3 py-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{t.player.displayName}</span>
+                    <span className="block text-xs text-muted">{dateOnly(t.at)}</span>
+                  </span>
                   <span className="num">{t.quantity} × {euro(t.priceCents)}</span>
                   <Pill tone={t.status === "SETTLED" ? "green" : "amber"}>{t.status === "SETTLED" ? "Afgewikkeld" : "In afwikkeling"}</Pill>
                 </li>

@@ -23,12 +23,13 @@ import type { DemoWorld } from "@px/demo";
 
 export const PREVIEW_TTL_MS = 60_000;
 
+/** Untrusted request body: every field is validated below. */
 export type PreviewRequest = {
-  side: unknown;
-  playerId: unknown;
-  quantity: unknown;
-  limitPriceMinor: unknown; // integer-cent string, e.g. "620"
-  timeInForce: unknown;
+  side?: unknown;
+  playerId?: unknown;
+  quantity?: unknown;
+  limitPriceMinor?: unknown; // integer-cent string, e.g. "620"
+  timeInForce?: unknown;
   cardIds?: unknown; // explicit selection for SELL, or "AUTO_OLDEST"
 };
 

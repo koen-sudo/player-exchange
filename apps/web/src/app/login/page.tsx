@@ -6,6 +6,9 @@ import { Logo } from "@/components/icons";
 
 export const metadata = { title: "Inloggen" };
 
+// The demo-login decision must be made at request time, never baked in at build time.
+export const dynamic = "force-dynamic";
+
 const DESCRIPTIONS: Record<string, string> = {
   anna: "Toegelaten handelaar met kaarten, saldo en een open order",
   bram: "Geregistreerd, nog niet geverifieerd: handelen geblokkeerd",

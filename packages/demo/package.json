@@ -10,7 +10,10 @@
     "@px/domain": "workspace:*"
   },
   "scripts": {
-    "test": "node --test test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "5.9.3"
   }
 }

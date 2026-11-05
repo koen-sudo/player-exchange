@@ -49,7 +49,11 @@ Lees vóór iedere fase: dit bestand, de betreffende specificaties in `docs/`, `
 
 | Doel | Commando |
 |---|---|
-| Domeintests | `pnpm test:domain` (of `node --test packages/domain/test/*.test.ts`) |
-| Databasetests | `pnpm test:db` (of `scripts/test-db.sh`) |
-| Alles | `pnpm turbo run typecheck test build` |
+| Unit- en integratietests (Vitest) | `pnpm test` |
+| Databasetests | `pnpm test:db` (vereist PostgreSQL) |
+| Typecheck | `pnpm typecheck` |
+| Build | `pnpm build` |
+| End-to-end (Playwright) | `pnpm test:e2e` |
 | Lokale diensten | `docker compose up -d db redis` |
+
+Bekijk na een wijziging aan schermen de demo op 390, 768 en 1440 px.

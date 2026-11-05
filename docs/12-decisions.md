@@ -70,11 +70,14 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-08 | Commissie half-omhoog in gehele getallen: `floor((bruto × bps + 5000) / 10000)`. | Exact, zonder floating point. |
 | R-09 | Gemiddelde aankoopprijs in de portefeuille wordt voor weergave half-omhoog op centen afgerond; totalen blijven exact. | Weergave; geen financieel effect. |
 | R-10 | Databaseconstraints in handgeschreven SQL-migraties; Drizzle-schema volgt het SQL-schema. | `docs/adr/0002-database-migrations.md`. |
-| R-11 | Zolang npm-toegang ontbreekt: domeintests draaien op de ingebouwde Node-testrunner; omzetting naar Vitest volgt zodra pakketten installeerbaar zijn. | `docs/adr/0003-interim-test-runner.md`. |
+| R-11 | Tests draaien op Vitest met `node:assert/strict`; de domeinlaag blijft zonder buildstap uitvoerbaar in Node.js. | `docs/adr/0003-interim-test-runner.md` (afgesloten). |
 | R-12 | Extra foutcodes naast de API-lijst: `QUANTITY_INVALID`, `TIME_IN_FORCE_INVALID`, `SELF_TRADE_REJECTED`, `EDITION_CAP_EXCEEDED`, `INVARIANT_VIOLATION`. | Nodig voor AT-37, BR-17 en de cap. |
 | R-13 | Gefaalde fill: kaart terug naar "open" alleen als de order nog actief en toegelaten is; anders telt hij als geannuleerd. | Hoofdstuk 07 "Definitieve mislukking", AT-20. |
 | R-14 | Eerste ronde (`round = 1`) dwingt `max_per_user = 1` af in de database; tweede ronde staat maximaal 3 toe. | A-07, BR-13. |
 | R-15 | Demodata gebruikt datums in seizoen 2026-2027 in plaats van de 2025-datums uit de wireframes. | Consistent met het huidige platformseizoen. |
+| R-16 | Spelersdetail op mobiel toont snelknoppen "Kopen" en "Verkopen" onder de prijzen die naar het handelspaneel springen; het paneel zelf blijft onderaan. | Volgt de mobiele wireframe; de controle-eerst-volgorde (WF-02) blijft gelijk. |
+| R-17 | In de markttabel wordt een onbekende wijziging getoond als "—" met schermlezertekst "Niet beschikbaar"; onbekende prijzen blijven voluit "Niet beschikbaar". | Ruimte in de tabel bij open handelspaneel; de wijziging is geen prijs. |
+| R-18 | TypeScript 5.9.3 in plaats van 7.0.2, Auth.js 5.0.0-beta.32 exact vastgepind, Playwright 1.64.1. | `docs/adr/0001-stack.md`. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 

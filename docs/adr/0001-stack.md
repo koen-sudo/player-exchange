@@ -1,6 +1,6 @@
 # ADR 0001 — Technische stack
 
-Status: aanvaard (5 november 2026). Versies: nog vast te leggen.
+Status: aanvaard (5 november 2026). Versies vastgelegd op 5 november 2026.
 
 ## Besluit
 
@@ -21,7 +21,22 @@ Eén repository, pnpm workspaces met Turborepo (A-13).
 
 ## Versies
 
-De dossierregel "actuele stabiele compatibiliteit controleren en exacte versies vastleggen" kon op 5 november 2026 niet worden uitgevoerd: deze bouwsessie had geen toegang tot de npm-registry. De versies in `package.json` zijn daarom bereiken. De eerste `pnpm install` met registry-toegang legt de exacte versies vast in `pnpm-lock.yaml`; daarna wordt deze ADR bijgewerkt met de vastgelegde versies.
+Gecontroleerd tegen de npm-registry op 5 november 2026 en vastgelegd in `pnpm-lock.yaml`.
+
+| Pakket | Versie | Opmerking |
+|---|---|---|
+| Node.js | 22 LTS (≥ 22.18) | Voert de domeinlaag zonder buildstap uit |
+| pnpm | 10.28 | Eén lockfile |
+| Turborepo | 2.11.10 | |
+| TypeScript | 5.9.3 | Bewust niet 7.0.2: de nieuwe native compiler is net uit en Next.js-tooling gebruikt nog de JavaScript-API van TypeScript. Herzien bij een volgende fase. |
+| Next.js | 16.4.5 | App Router, Turbopack |
+| React / React DOM | 19.3.1 | |
+| Auth.js (`next-auth`) | 5.0.0-beta.32 | Auth.js v5 is nog als bèta gepubliceerd; de stabiele lijn (4.x) ondersteunt de App Router-API niet. Exact vastgepind; herzien vóór productie (gate Security). |
+| Tailwind CSS | 4.3.4 | |
+| Zod | 4.6.7 | |
+| Vitest | 5.1.0 | |
+| Playwright | 1.64.1 | 1.65.0 was gepubliceerd zonder bijbehorend `playwright-core`; daarom de laatste complete release |
+| PostgreSQL | 16 | |
 
 ## Gevolgen
 

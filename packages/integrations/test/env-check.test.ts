@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { ConfigError, isDemoLoginAllowed, loadConfig } from "../src/env-check.ts";
 import { blockedFlows, type PaymentCapability } from "../src/contracts.ts";
