@@ -10,10 +10,10 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:domain": "node --test packages/domain/test/*.test.ts packages/demo/test/*.test.ts packages/integrations/test/*.test.ts apps/web/test/*.test.ts",
+    "test:domain": "node --test packages/domain/test/*.test.ts packages/demo/test/*.test.ts packages/integrations/test/*.test.ts apps/web/test/*.test.ts apps/worker/test/*.test.ts",
     "test:db": "bash scripts/test-db.sh",
     "db:migrate": "bash scripts/migrate.sh",
-    "db:seed": "node packages/demo/src/seed-sql.ts | psql -v ON_ERROR_STOP=1 -q",
+    "db:seed": "node packages/demo/src/seed-sql.ts | psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q",
     "check:env": "node packages/integrations/src/env-check.ts"
   },
   "devDependencies": {

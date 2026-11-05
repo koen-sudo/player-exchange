@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: px
+          POSTGRES_PASSWORD: px
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U px" --health-interval 5s --health-retries 10
+    env:
+      APP_MODE: demo
+      DEMO_LOGIN_ENABLED: "true"
+      DATABASE_URL: postgres://px:px@localhost:5432/postgres
+      AUTH_SECRET: ci-only-secret-not-for-any-deployment
+      PAYMENT_PROVIDER: demo
+      IDENTITY_PROVIDER: demo
+      FOOTBALL_DATA_PROVIDER: fixture
+      NOTIFICATION_PROVIDER: demo
+      PGHOST: localhost
+      PGUSER: px
+      PGPASSWORD: px
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Domein- en server-tests
+        run: pnpm test:domain
+      - name: Database-constrainttests
+        run: pnpm test:db
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+      - name: End-to-end
+        run: |
+          pnpm --filter @px/web exec playwright install --with-deps chromium
+          pnpm --filter @px/web test:e2e

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Huisstijl (docs/02-ux.md): navigatie #142C3C, achtergrond #F7F8FA, primair #087D70. */
+@theme {
+  --color-navy: #142c3c;
+  --color-navy-2: #1d3b4f;
+  --color-canvas: #f7f8fa;
+  --color-primary: #087d70;
+  --color-primary-dark: #066157;
+  --color-primary-soft: #e3f2ef;
+  --color-ink: #13202b;
+  --color-muted: #5c6b77;
+  --color-line: #e2e6ea;
+  --color-up: #0b7a43;
+  --color-down: #b42318;
+  --color-warn-soft: #fdf3dc;
+  --color-danger-soft: #fde7e5;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Getallen in tabellen en bedragen: tabular numerals. */
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: rgb(20 44 60 / 0.45);
+}

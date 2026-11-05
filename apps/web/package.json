@@ -1,0 +1,34 @@
+{
+  "name": "@px/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@px/demo": "workspace:*",
+    "@px/domain": "workspace:*",
+    "@px/integrations": "workspace:*",
+    "next": "^16",
+    "next-auth": "^5",
+    "react": "^19",
+    "react-dom": "^19",
+    "server-only": "^0.0.1",
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5.9"
+  }
+}

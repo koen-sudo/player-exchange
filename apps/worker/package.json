@@ -1,0 +1,16 @@
+{
+  "name": "@px/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@px/domain": "workspace:*",
+    "@px/integrations": "workspace:*"
+  },
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
