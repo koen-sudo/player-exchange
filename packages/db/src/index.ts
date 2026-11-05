@@ -6,3 +6,6 @@ export * from "./catalog-read.ts";
 export * from "./admin-read.ts";
 export * from "./admin-actions.ts";
 export { RESTRICTION_TYPES as RESTRICTION_TYPES_LIST, type RestrictionType } from "./schema.ts";
+export * from "./approvals.ts";
+export * from "./inventory.ts";
+export * from "./player-admin.ts";

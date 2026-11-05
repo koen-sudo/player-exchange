@@ -62,8 +62,10 @@ export class DomainError extends Error {
     this.details = details;
   }
 
+  /** A specific Dutch explanation (details.userMessage) or the generic one for the code. */
   get userMessage(): string {
-    return USER_MESSAGES_NL[this.code];
+    const specific = this.details?.userMessage;
+    return typeof specific === "string" && specific.length > 0 ? specific : USER_MESSAGES_NL[this.code];
   }
 }
 
