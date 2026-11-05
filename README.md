@@ -2,7 +2,7 @@
 
 Marktplaats voor digitale voetballerskaarten met echte aankoop- en verkoopprijzen. Gebruikers ontdekken spelers, kopen kaarten bij uitgiftes, volgen hun ontwikkeling en verkopen kaarten aan andere gebruikers. Player Exchange publiceert een eigen referentiewaarde in euro's en ontvangt 5% verkoperscommissie op secundaire verkopen.
 
-> **Status: demo, fase 0 tot en met 4 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
+> **Status: demo, fase 0 tot en met 5 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
 
 ## Snel starten (lokale demo)
 

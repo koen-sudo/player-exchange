@@ -34,7 +34,7 @@ _Bron: bouwdossier V1.0 hoofdstuk 12 en addendum V1.1. Nieuwe routinekeuzes van 
 | A-11 | Initialen als standaardbeeld | UI (fase 1) |
 | A-12 | TypeScript/PostgreSQL-stack | `docs/adr/0001-stack.md` |
 | A-13 | pnpm workspaces met Turborepo, één lockfile; db-migraties, seeds en externe mutaties nooit uit cache | `turbo.json` (`cache: false` voor die taken) |
-| A-14 | Storten €5–€2.500 per keer, maximaal 3 onafgeronde stortingen tegelijk; opnemen €1–€5.000 en nooit meer dan beschikbaar | `packages/domain/src/payments.ts` (`DEFAULT_PAYMENT_LIMITS`); definitief vast te stellen met de betaalpartner (O-02) |
+| A-14 | Storten €5–€2.500 per keer, maximaal 3 onafgeronde stortingen tegelijk; opnemen €1–€5.000 en nooit meer dan beschikbaar | `packages/domain/src/payments.ts` (`DEFAULT_PAYMENT_LIMITS`); bevestigd door de producteigenaar op 5 november 2026; kan per betaalpartner worden bijgesteld (O-02) |
 
 Deze aannames zijn geen reden om de ontwikkeling te pauzeren. Ze zijn configureerbaar en getest uitgewerkt.
 
@@ -105,6 +105,12 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-42 | Een betaalpagina die niemand afrondt, verloopt na een uur bij de betaalpartner; de storting wordt dan ‘mislukt (verlopen)’ zonder boeking. | Voorkomt dat onafgeronde stortingen de limiet van A-14 blijvend vullen. |
 | R-43 | Nieuwe foutcodes `AMOUNT_INVALID` en `PAYMENT_ACCOUNT_MISSING`. | Aanvulling op de foutcatalogus (docs/06). |
 | R-44 | Demo-openingssaldi zijn vastgelegd als bevestigde storting met een operatie bij de betaalsimulator, zodat de reconciliatie vanaf de start aansluit. | Seed. |
+| R-45 | Een orderpreview wordt server-side bewaard (60 seconden geldig, eenmalig te gebruiken). Plaatsen verwijst naar die preview; de server controleert alles opnieuw onder locks. Dezelfde Idempotency-Key geeft dezelfde order terug. | docs/06 "Orderpreview", AT-08. |
+| R-46 | Het orderboek en de laatste transactie komen uit de database. Zolang een speler nog geen echte transactie heeft, toont de demo de laatste koers uit de demowereld. | Demo blijft gevuld; vervalt vanzelf bij de eerste echte transactie (vervangt het orderboekdeel van R-36). |
+| R-47 | De demo-seed vult het orderboek met orders van een fictieve verzamelaar (met echte kaart- en geldreserveringen). Niveaus die een eigen order van Anna zouden kruisen, worden weggelaten; een kruisend boek kan niet blijven staan. Ordertijden zijn relatief aan het seedmoment. | Wireframe-cijfers blijven zichtbaar zonder dat het boek op een vaste datum verloopt. |
+| R-48 | De commissie van een uitvoering wordt bij de match vastgesteld uit de cumulatieve stand van de verkooporder en pas bij definitieve afwikkeling geboekt. Omdat per markt maar één afwikkeling tegelijk loopt, kan de stand daartussen niet veranderen. | BR-20, BR-21; de betaalpartner krijgt bruto, netto en fee vooraf. |
+| R-49 | Na een definitief mislukte afwikkeling krijgen nog lopende orders hun deel terug met hun oorspronkelijke prioriteit; een geannuleerde of verlopen order niet. De matcher stopt dan voor die markt tot de volgende workercyclus (geen directe herhaling). | docs/07 "Definitieve mislukking", AT-23. |
+| R-50 | Een prijswijziging van een order = annuleren van het restant en een nieuwe order met nieuwe tijdprioriteit; er is geen aparte wijzigknop. | BR-14. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 
@@ -136,7 +142,7 @@ Geen tegenstrijdigheden gevonden in de geld-, eigendoms- of afwikkelregels.
 
 | ID | Vraag | Tijdelijke werkwijze |
 |---|---|---|
-| V-01 | Mag de dropprijs tussen publicatie (donderdag 18.00) en vastlegging (dinsdag 09.00) nog wijzigen? | **Beantwoord 5 november 2026: ja.** Open deelvraag V-01a: alleen omlaag, of in beide richtingen? Nodig in fase 6. |
+| V-01 | Mag de dropprijs tussen publicatie (donderdag 18.00) en vastlegging (dinsdag 09.00) nog wijzigen? | **Beantwoord 5 november 2026: ja, in beide richtingen (V-01a).** Inschrijvers zien de actuele prijs vóór bevestigen; een prijswijziging na inschrijving volgt in fase 6. |
 | V-02 | Is er een wireframe van het marktoverzicht (UX-01)? | Gebouwd volgens UX-01. |
 
 ## Visuele referenties

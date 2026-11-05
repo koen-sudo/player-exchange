@@ -6,7 +6,7 @@
  */
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { demoWorld, type Player } from "./world.ts";
+import { demoId, demoWorld, type Player } from "./world.ts";
 
 /** Fictitious holder of the delivered demo cards that are not Anna's. Cannot log in (no demo: subject). */
 export const COLLECTOR_ID = "d0000005-0000-4000-8000-000000000099";
@@ -80,23 +80,59 @@ export function seedSql(): string {
       `WHERE c.status = 'OWNED';`,
   );
 
-  // Anna's orders, so reservations and her order list come from the database.
-  // Cash holds for buy orders follow with the ledger in fase 4.
-  const seqByMarket = new Map<string, number>();
+  // Order book (fase 5): a fictitious collector's resting orders reproduce the
+  // demo book, then Anna's own orders. Times are relative to the moment of
+  // seeding, so the demo book does not run out on a fixed date. Levels that
+  // would cross one of Anna's orders are left out (a crossing book cannot rest).
+  type SeedOrder = { id: string; userId: string; playerId: string; side: "BUY" | "SELL"; limit: number; tif: string; hours: number;
+    qty: { original: number; open: number; pending: number; filled: number; cancelled: number; expired: number }; acceptedAt: Date; cards: { playerId: string; serial: number }[] };
+  const HOURS: Record<string, number> = { ONE_DAY: 24, SEVEN_DAYS: 168, THIRTY_DAYS: 720 };
+  const rel = (d: Date) => `(now() - interval '${Math.round((w.now.getTime() - d.getTime()) / 1000)} seconds')`;
+  const annaOpen = w.orders.filter((o) => o.qty.open > 0);
+  const heldSerials = new Set(Object.values(w.holdings).flat().map((c) => `${c.playerId}:${c.serial}`));
+  const seedOrders: SeedOrder[] = [];
+  let n = 0;
+  for (const p of w.players.filter((x) => x.marketStatus === "OPEN")) {
+    const mine = annaOpen.filter((o) => o.playerId === p.id);
+    const maxBid = Math.max(0, ...mine.filter((o) => o.side === "BUY").map((o) => o.limitPriceCents));
+    const minAsk = Math.min(Infinity, ...mine.filter((o) => o.side === "SELL").map((o) => o.limitPriceCents));
+    const free = Array.from({ length: p.supply.inCirculation }, (_, i) => i + 1).filter((s) => !heldSerials.has(`${p.id}:${s}`));
+    const accepted = new Date(w.now.getTime() - 72 * 3_600_000);
+    for (const l of p.asks) {
+      if (l.price <= maxBid) continue;
+      const ownAtLevel = mine.filter((o) => o.side === "SELL" && o.limitPriceCents === l.price).reduce((k, o) => k + o.qty.open, 0);
+      const qty = Math.min(l.quantity - ownAtLevel, free.length);
+      if (qty <= 0) continue;
+      const cards = free.splice(0, qty).map((serial) => ({ playerId: p.id, serial }));
+      seedOrders.push({ id: demoId(10, ++n), userId: COLLECTOR_ID, playerId: p.id, side: "SELL", limit: l.price, tif: "THIRTY_DAYS", hours: 720,
+        qty: { original: qty, open: qty, pending: 0, filled: 0, cancelled: 0, expired: 0 }, acceptedAt: accepted, cards });
+    }
+    for (const l of p.bids) {
+      if (l.price >= minAsk) continue;
+      seedOrders.push({ id: demoId(10, ++n), userId: COLLECTOR_ID, playerId: p.id, side: "BUY", limit: l.price, tif: "THIRTY_DAYS", hours: 720,
+        qty: { original: l.quantity, open: l.quantity, pending: 0, filled: 0, cancelled: 0, expired: 0 }, acceptedAt: accepted, cards: [] });
+    }
+  }
+  const held = Object.values(w.holdings).flat();
   for (const o of w.orders) {
+    seedOrders.push({ id: o.id, userId: o.userId, playerId: o.playerId, side: o.side, limit: o.limitPriceCents, tif: o.timeInForce, hours: HOURS[o.timeInForce]!,
+      qty: o.qty, acceptedAt: o.acceptedAt, cards: o.cardIds.map((id) => { const c = held.find((h) => h.cardId === id)!; return { playerId: c.playerId, serial: c.serial }; }) });
+  }
+  const seqByMarket = new Map<string, number>();
+  for (const o of seedOrders) {
     const seq = (seqByMarket.get(o.playerId) ?? 0) + 1;
     seqByMarket.set(o.playerId, seq);
     const state = o.qty.open + o.qty.pending > 0 ? "ACTIVE" : "CLOSED";
     out.push(
-      `INSERT INTO orders(id, player_market_id, user_id, side, limit_price_cents, time_in_force, state, priority_sequence, qty_original, qty_open, qty_pending, qty_filled, qty_cancelled, qty_expired, accepted_at, expires_at) ` +
-        `SELECT ${q(o.id)}, pm.id, ${q(o.userId)}, ${q(o.side)}, ${o.limitPriceCents}, ${q(o.timeInForce)}, ${q(state)}, ${seq}, ${o.qty.original}, ${o.qty.open}, ${o.qty.pending}, ${o.qty.filled}, ${o.qty.cancelled}, ${o.qty.expired}, ${ts(o.acceptedAt)}, ${ts(o.expiresAt)} ` +
+      `INSERT INTO orders(id, player_market_id, user_id, side, limit_price_cents, time_in_force, state, priority_sequence, qty_original, qty_open, qty_pending, qty_filled, qty_cancelled, qty_expired, accepted_at, expires_at, closed_at) ` +
+        `SELECT ${q(o.id)}, pm.id, ${q(o.userId)}, ${q(o.side)}, ${o.limit}, ${q(o.tif)}, ${q(state)}, ${seq}, ${o.qty.original}, ${o.qty.open}, ${o.qty.pending}, ${o.qty.filled}, ${o.qty.cancelled}, ${o.qty.expired}, ` +
+        `${rel(o.acceptedAt)}, ${rel(o.acceptedAt)} + interval '${o.hours} hours', ${state === "CLOSED" ? `${rel(o.acceptedAt)} + interval '${o.hours} hours'` : "NULL"} ` +
         `FROM player_markets pm WHERE pm.player_id = ${q(o.playerId)};`,
     );
-    for (const cardId of o.cardIds) {
-      const held = Object.values(w.holdings).flat().find((c) => c.cardId === cardId)!;
+    for (const c of o.cards) {
       out.push(
         `INSERT INTO order_cards(order_id, card_id, active) SELECT ${q(o.id)}, c.id, ${state === "ACTIVE"} FROM cards c JOIN editions e ON e.id = c.edition_id ` +
-          `WHERE e.player_id = ${q(held.playerId)} AND c.serial_number = ${held.serial};`,
+          `WHERE e.player_id = ${q(c.playerId)} AND c.serial_number = ${c.serial};`,
       );
     }
   }
@@ -116,8 +152,9 @@ export function seedSql(): string {
       out.push(`INSERT INTO journal_lines(journal_entry_id, ledger_account_id, side, amount_cents) VALUES ((SELECT id FROM journal_entries WHERE business_event_id = ${q(eventId)}), ${account}, '${side}', ${amount});`);
     }
   };
-  for (const [userId, bal] of Object.entries(w.balances)) {
-    const holds = w.orders.filter((o) => o.userId === userId && o.side === "BUY" && o.qty.open > 0).map((o) => ({ order: o, amount: o.qty.open * o.limitPriceCents }));
+  const balances: Record<string, { available: number }> = { ...w.balances, [COLLECTOR_ID]: { available: 0 } };
+  for (const [userId, bal] of Object.entries(balances)) {
+    const holds = seedOrders.filter((o) => o.userId === userId && o.side === "BUY" && o.qty.open > 0).map((o) => ({ order: o, amount: o.qty.open * o.limit }));
     const opening = bal.available + holds.reduce((n, h) => n + h.amount, 0);
     if (opening === 0) continue;
     out.push(`INSERT INTO ledger_accounts(type, owner_user_id) VALUES ('CUSTOMER_AVAILABLE', ${q(userId)}), ('CUSTOMER_RESERVED', ${q(userId)}) ON CONFLICT DO NOTHING;`);

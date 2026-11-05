@@ -1,15 +1,20 @@
 import { randomUUID } from "node:crypto";
+import { createOrderPreview, getDb } from "@px/db";
+import { loadConfig } from "@px/integrations/env";
 import { currentUser } from "@/server/session";
-import { buildOrderPreview } from "@/server/order-preview";
-import { apiError, apiOk, sameOrigin } from "@/server/api";
-import { loadWorld } from "@/server/world";
+import { apiError, apiFromError, apiOk, sameOrigin } from "@/server/api";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * POST /api/v1/order-previews — the server checks the order against current
+ * state and computes all totals. It reserves nothing; valid 60 seconds (docs/06).
+ */
 export async function POST(req: Request) {
   const requestId = randomUUID();
   if (!sameOrigin(req)) return apiError("ACTION_NOT_ALLOWED", requestId, "cross-origin preview");
   const user = await currentUser();
+  if (!user) return apiError("AUTH_REQUIRED", requestId);
   let body: unknown;
   try {
     body = await req.json();
@@ -17,8 +22,11 @@ export async function POST(req: Request) {
     return apiError("ACTION_NOT_ALLOWED", requestId, "invalid json");
   }
   if (!body || typeof body !== "object") return apiError("ACTION_NOT_ALLOWED", requestId);
-  // The server determines the user from the session, never from the body.
-  const actor = user ? { id: user.id, trade: user.actions.TRADE } : null;
-  const result = buildOrderPreview(await loadWorld(user?.id ?? null), actor, body as Record<string, unknown>, new Date(), randomUUID);
-  return result.ok ? apiOk(result.preview, requestId) : apiError(result.code, requestId, result.details);
+  try {
+    // The server determines the user from the session, never from the body.
+    const preview = await createOrderPreview(getDb().db, loadConfig(process.env).mode, user.id, body as Record<string, unknown>);
+    return apiOk(preview, requestId);
+  } catch (e) {
+    return apiFromError(e, requestId);
+  }
 }

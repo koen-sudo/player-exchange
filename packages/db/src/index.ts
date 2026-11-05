@@ -14,3 +14,4 @@ export * from "./holds.ts";
 export * from "./payment-simulator.ts";
 export * from "./payments.ts";
 export * from "./reconciliation.ts";
+export * from "./trading.ts";

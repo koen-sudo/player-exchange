@@ -9,6 +9,7 @@
  * come from the server, never from this component.
  */
 import { useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { euroFromMinor, euroInputToMinor, dateTime } from "@/lib/format";
 
 type Side = "BUY" | "SELL";
@@ -47,7 +48,9 @@ export function OrderTicket(props: OrderTicketProps) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [placing, setPlacing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [placed, setPlaced] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
   const ids = useId();
 
   const limitMinor = euroInputToMinor(price);
@@ -57,6 +60,7 @@ export function OrderTicket(props: OrderTicketProps) {
   async function review() {
     setError(null);
     setResult(null);
+    setPlaced(false);
     if (!limitMinor) return setError("Vul een geldige prijs in, bijvoorbeeld 6,20.");
     if (!Number.isInteger(qtyNum) || qtyNum < 1) return setError("Vul een geldig aantal hele kaarten in.");
     const res = await fetch("/api/v1/order-previews", {
@@ -83,8 +87,20 @@ export function OrderTicket(props: OrderTicketProps) {
         headers: { "content-type": "application/json", "idempotency-key": String(preview.previewId) },
         body: JSON.stringify({ previewId: preview.previewId }),
       });
-      const body = (await res.json().catch(() => null)) as { message?: string } | null;
-      setResult(body?.message ?? "Er ging iets mis. Er is niets geplaatst.");
+      const body = (await res.json().catch(() => null)) as { message?: string; data?: { status: string; executions: { status: string }[] } } | null;
+      if (res.ok && body?.data) {
+        const settled = body.data.executions.filter((x) => x.status === "SETTLED").length;
+        const pending = body.data.executions.filter((x) => x.status !== "SETTLED" && x.status !== "FAILED").length;
+        const parts = ["Order geplaatst."];
+        if (settled) parts.push(`${settled} ${settled === 1 ? "kaart is" : "kaarten zijn"} direct ${preview.side === "BUY" ? "gekocht" : "verkocht"} en afgewikkeld.`);
+        if (pending) parts.push("Eén uitvoering wacht nog op bevestiging van de betaalpartner.");
+        if (!settled && !pending) parts.push("Hij staat in het orderboek tot hij wordt uitgevoerd, verloopt of je hem annuleert.");
+        setResult(parts.join(" "));
+        setPlaced(true);
+        router.refresh();
+      } else {
+        setResult(body?.message ?? "Er ging iets mis. Er is niets geplaatst.");
+      }
     } finally {
       setPlacing(false);
     }
@@ -177,10 +193,10 @@ export function OrderTicket(props: OrderTicketProps) {
               <p className="text-sm text-muted">
                 {preview.side === "BUY" ? "Plaatsing is nog geen aankoop. Uitvoering zodra een passende verkooporder beschikbaar is." : "Plaatsing is nog geen verkoop. Uitvoering zodra een koper jouw prijs accepteert."}
               </p>
-              {result && <p role="status" className="rounded-lg bg-warn-soft px-3 py-2 text-sm">{result}</p>}
+              {result && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${placed ? "bg-primary-soft" : "bg-warn-soft"}`}>{result}</p>}
               <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => dialogRef.current?.close()} className="rounded-lg border border-slate-300 py-2.5 font-medium">Terug</button>
-                <button type="button" onClick={place} disabled={placing} className="rounded-lg bg-primary py-2.5 font-semibold text-white disabled:opacity-50">
+                <button type="button" onClick={() => dialogRef.current?.close()} className="rounded-lg border border-slate-300 py-2.5 font-medium">{placed ? "Sluiten" : "Terug"}</button>
+                <button type="button" onClick={place} disabled={placing || placed} className="rounded-lg bg-primary py-2.5 font-semibold text-white disabled:opacity-50">
                   {preview.side === "BUY" ? "Kooporder plaatsen" : "Verkooporder plaatsen"}
                 </button>
               </div>

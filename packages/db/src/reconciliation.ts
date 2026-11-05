@@ -36,7 +36,7 @@ export async function runReconciliation(
 
   const ops = (await db.execute<{ id: string; type: string; idempotency_key: string; amount_cents: string; status: string; user_id: string | null; processed: boolean }>(sql`
     SELECT id, type, idempotency_key, amount_cents, status::text, user_id, financially_processed_at IS NOT NULL AS processed
-      FROM settlement_operations WHERE provider = ${providerName} AND type IN ('DEPOSIT','WITHDRAWAL')`)).rows;
+      FROM settlement_operations WHERE provider = ${providerName} AND type IN ('DEPOSIT','WITHDRAWAL','SECONDARY_SETTLEMENT')`)).rows;
 
   const findings: Finding[] = [];
   const seen = new Set<string>();

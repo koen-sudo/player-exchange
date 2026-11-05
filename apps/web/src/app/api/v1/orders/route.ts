@@ -1,29 +1,29 @@
 import { randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
+import { placeOrder } from "@px/db";
 import { currentUser } from "@/server/session";
-import { apiError, idempotencyKey, sameOrigin } from "@/server/api";
+import { apiError, apiFromError, apiOk, idempotencyKey, sameOrigin } from "@/server/api";
+import { payments } from "@/server/payments";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Placing an order requires the trading, ledger and settlement services
- * (fases 4–5). In this demo build the endpoint validates the request shape,
- * session and idempotency key, then states explicitly that nothing was placed.
- * It never pretends an order exists.
+ * POST /api/v1/orders {previewId} — confirms a server preview and places the
+ * order. Everything is checked again under locks; money or cards are reserved
+ * in the same transaction. A repeat with the same Idempotency-Key returns the
+ * same order.
  */
 export async function POST(req: Request) {
   const requestId = randomUUID();
   if (!sameOrigin(req)) return apiError("ACTION_NOT_ALLOWED", requestId);
   const user = await currentUser();
   if (!user) return apiError("AUTH_REQUIRED", requestId);
-  if (!user.actions.TRADE.allowed) return apiError(user.actions.TRADE.code, requestId);
-  if (!idempotencyKey(req)) return apiError("ACTION_NOT_ALLOWED", requestId, "missing Idempotency-Key");
-  return NextResponse.json(
-    {
-      requestId,
-      code: "DEMO_NOT_PLACED",
-      message: "Demo: de order is gecontroleerd maar niet geplaatst. De handelsdienst wordt in fase 5 aangesloten.",
-    },
-    { status: 501 },
-  );
+  const key = idempotencyKey(req);
+  if (!key) return apiError("ACTION_NOT_ALLOWED", requestId, "missing Idempotency-Key");
+  try {
+    const body = (await req.json().catch(() => ({}))) as { previewId?: unknown };
+    const r = await placeOrder(payments(), user.id, { previewId: String(body.previewId ?? ""), requestKey: key });
+    return apiOk(r, requestId);
+  } catch (e) {
+    return apiFromError(e, requestId);
+  }
 }

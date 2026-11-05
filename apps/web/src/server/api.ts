@@ -20,6 +20,9 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   RECONCILIATION_HOLD: 423,
   INSUFFICIENT_AVAILABLE_FUNDS: 422,
   AMOUNT_INVALID: 422,
+  MARKET_NOT_OPEN: 409,
+  CARD_UNAVAILABLE: 409,
+  SELF_TRADE_REJECTED: 409,
 };
 
 export function apiError(code: ErrorCode, requestId = randomUUID(), logDetail?: unknown) {

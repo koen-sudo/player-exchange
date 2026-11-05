@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, getDb, paymentsContext, pollOpenOperations, runCatalogImport, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
+import { claimNextRun, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -32,10 +32,11 @@ export const JOBS: JobDefinition[] = [
   { name: "external-valuations.check", schedule: "dagelijks", fase: 7, run: notYet(7) },
   { name: "valuation.weekly-run", schedule: "maandag 18.00 Europe/Amsterdam, na controle", fase: 7, run: notYet(7) },
   { name: "drops.open-close", schedule: "op vastgelegde UTC-tijdstippen", fase: 6, run: notYet(6) },
-  { name: "orders.expire", schedule: "periodiek", fase: 5, run: notYet(5) },
+  { name: "orders.expire", schedule: "elke 5 s: vrije restanten van verlopen orders sluiten", fase: 5, run: async () => undefined },
+  { name: "trading.match", schedule: "elke 5 s: markten met een kruisend orderboek en geen open afwikkeling", fase: 5, run: async () => undefined },
   { name: "payments.poll", schedule: "elke 5 s: open stortingen/opnames opvragen of opnieuw indienen, wachtende webhooks koppelen", fase: 4, run: async () => undefined },
   { name: "payments.simulator-webhooks", schedule: "alleen demo: elke 5 s de webhooks van de betaalsimulator afleveren", fase: 4, run: async () => undefined },
-  { name: "settlement.poll", schedule: "volgens status en providerlimieten", fase: 5, run: notYet(5) },
+  { name: "settlement.poll", schedule: "elke 5 s, samen met payments.poll (dezelfde operatietabel)", fase: 5, run: async () => undefined },
   { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna", fase: 4, run: async () => undefined },
   { name: "notifications.outbox", schedule: "continu via outbox", fase: 6, run: notYet(6) },
 ];
@@ -79,6 +80,15 @@ export async function paymentsOnce(ctx: PaymentsCtx & { simulator: ReturnType<ty
   return { delivered, ...polled };
 }
 
+/** One trading cycle: expire free remainders, then match markets that cross. */
+export async function tradingOnce(ctx: PaymentsCtx): Promise<{ expired: number; markets: number; executions: number }> {
+  const expired = await expireOrders(ctx);
+  const markets = await marketsToMatch(ctx.db);
+  let executions = 0;
+  for (const m of markets) executions += (await runMarket(ctx, m)).length;
+  return { expired, markets: markets.length, executions };
+}
+
 export function startWorker(env: Readonly<Record<string, string | undefined>> = process.env, opts: { pollMs?: number; db?: Db } = {}) {
   const cfg = loadConfig(env); // throws on invalid/unsafe configuration (AT-35)
   let stopping = false;
@@ -103,8 +113,11 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
     paying = true;
     try {
       const db = opts.db ?? getDb(cfg.databaseUrl).db;
-      const r = await paymentsOnce(paymentsContext(db, cfg), `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
+      const ctx = paymentsContext(db, cfg);
+      const r = await paymentsOnce(ctx, `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
       if (r.delivered || r.finalised) console.log(JSON.stringify({ level: "info", msg: "payments cycle", ...r }));
+      const tr = await tradingOnce(ctx);
+      if (tr.expired || tr.executions) console.log(JSON.stringify({ level: "info", msg: "trading cycle", ...tr }));
     } catch (e) {
       console.error(JSON.stringify({ level: "error", msg: "payments cycle failed", error: (e as Error).message }));
     } finally {

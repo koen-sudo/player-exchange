@@ -7,7 +7,7 @@ import { signOut } from "@/auth";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   return (
-    <div className="min-h-dvh">
+    <div className="flex min-h-dvh flex-col">
       {/* Demo banner: the demo is never presented as a live service (docs/10). */}
       <div className="bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-950">
         Demo · fictieve spelers en testgeld · geen live service en geen echte betalingen
@@ -55,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex flex-1">
         <div className="hidden w-56 shrink-0 bg-navy md:block">
         <nav aria-label="Hoofdnavigatie" className="sticky top-16 flex flex-col gap-1 p-3">
           <NavLink href="/" variant="side"><IconHome />Overzicht</NavLink>

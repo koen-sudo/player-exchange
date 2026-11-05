@@ -20,13 +20,15 @@ import type { PaymentProvider, ProviderOutcome } from "@px/integrations";
 import type { Db, Executor } from "./client.ts";
 import { admissionFacts, writeAudit, type AppMode } from "./identity.ts";
 import { balancesFor, book, postings } from "./ledger.ts";
+import { applySettlementOutcome, continueAfterOperation, submitSettlement } from "./trading.ts";
 import { createPaymentSimulator, SIM_PROVIDER, type PaymentSimulator, type SimScenario as SimScenarioName } from "./payment-simulator.ts";
 
 export type PaymentsCtx = { db: Db; provider: PaymentProvider; providerName: string; mode: AppMode };
 
 type OpRow = {
   id: string;
-  type: "DEPOSIT" | "WITHDRAWAL";
+  type: "DEPOSIT" | "WITHDRAWAL" | "SECONDARY_SETTLEMENT";
+  execution_id: string | null;
   idempotency_key: string;
   provider_reference: string | null;
   amount_cents: string;
@@ -84,7 +86,7 @@ async function notify(tx: Executor, userId: string, template: string, dedupeKey:
 }
 
 const lockOp = async (tx: Executor, opId: string) =>
-  (await tx.execute<OpRow>(sql`SELECT id, type, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
+  (await tx.execute<OpRow>(sql`SELECT id, type, execution_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
 
 // ---------------------------------------------------------------------------
 // Applying a provider outcome (the only place that books deposit/withdrawal money)
@@ -98,6 +100,10 @@ export async function applyOperationOutcome(tx: Executor, mode: AppMode, opId: s
   const amount = Number(op.amount_cents);
   if (outcome.providerReference && !op.provider_reference) {
     await tx.execute(sql`UPDATE settlement_operations SET provider_reference = ${outcome.providerReference} WHERE id = ${op.id}`);
+  }
+  if (op.type === "SECONDARY_SETTLEMENT") {
+    const r = await applySettlementOutcome(tx, mode, { id: op.id, execution_id: op.execution_id! }, outcome);
+    return r;
   }
   const finalise = async (status: "SUCCEEDED" | "FAILED", error: string | null) => {
     await tx.execute(sql`
@@ -325,10 +331,13 @@ export async function processInboxEvent(ctx: PaymentsCtx, eventId: string): Prom
   // Not linked yet (e.g. the provider answered after our call timed out): keep it; polling links it.
   if (!op) return { http: 202, result: "QUEUED" };
   const outcome = await ctx.provider.queryStatus({ idempotencyKey: op.key });
-  await ctx.db.transaction(async (tx) => {
-    await applyOperationOutcome(tx, ctx.mode, op.id, outcome);
+  const applied = await ctx.db.transaction(async (tx) => {
+    const r = await applyOperationOutcome(tx, ctx.mode, op.id, outcome);
     await tx.execute(sql`UPDATE inbox_events SET processing_status = 'PROCESSED', processed_at = now() WHERE provider = ${ctx.providerName} AND external_event_id = ${eventId}`);
+    return r;
   });
+  // A finished settlement frees its market for the next match.
+  if (applied === "FINALISED") await continueAfterOperation(ctx, op.id);
   return { http: 200, result: "PROCESSED" };
 }
 
@@ -340,10 +349,10 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
   const older = opts.olderThanSeconds ?? 10;
   const abandon = opts.abandonAfterSeconds ?? 15 * 60;
   const ops = (await ctx.db.execute<OpRow & { age: number }>(sql`
-    SELECT id, type, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at,
+    SELECT id, type, execution_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at,
            extract(epoch FROM now() - created_at)::int AS age
       FROM settlement_operations
-     WHERE type IN ('DEPOSIT','WITHDRAWAL') AND provider = ${ctx.providerName} AND financially_processed_at IS NULL
+     WHERE type IN ('DEPOSIT','WITHDRAWAL','SECONDARY_SETTLEMENT') AND provider = ${ctx.providerName} AND financially_processed_at IS NULL
        AND status IN ('CREATED','SUBMITTED','PENDING','UNKNOWN') AND updated_at <= now() - make_interval(secs => ${older})
      ORDER BY updated_at LIMIT 50`)).rows;
   let finalised = 0;
@@ -353,6 +362,15 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
       const wd = (await ctx.db.execute<{ id: string }>(sql`SELECT id FROM withdrawals WHERE operation_id = ${op.id}`)).rows[0]!;
       const s = await submitWithdrawal(ctx, wd.id); // replay with the same key
       if (s === "PAID" || s === "FAILED") finalised++;
+      continue;
+    }
+    if (op.type === "SECONDARY_SETTLEMENT" && (op.status === "CREATED" || op.status === "UNKNOWN")) {
+      // Never submitted, or the answer was lost: replay with the same key.
+      const s = await submitSettlement(ctx, op.execution_id!);
+      if (s === "SETTLED" || s === "FAILED") {
+        finalised++;
+        await continueAfterOperation(ctx, op.id);
+      }
       continue;
     }
     const outcome = await ctx.provider.queryStatus({ idempotencyKey: op.idempotency_key });
@@ -365,7 +383,10 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
       continue;
     }
     const r = await ctx.db.transaction((tx) => applyOperationOutcome(tx, ctx.mode, op.id, outcome));
-    if (r === "FINALISED") finalised++;
+    if (r === "FINALISED") {
+      finalised++;
+      if (op.type === "SECONDARY_SETTLEMENT") await continueAfterOperation(ctx, op.id);
+    }
   }
   // Events that arrived before their operation was linked.
   const waiting = (await ctx.db.execute<{ external_event_id: string; old: boolean }>(sql`

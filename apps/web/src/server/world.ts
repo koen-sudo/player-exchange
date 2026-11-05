@@ -2,19 +2,19 @@
  * The app's read model for the screens (R-28, fase 3).
  *
  * From PostgreSQL: competitions, teams, players (status, admission, team,
- * role, published reference), supply per player, and the signed-in user's
+ * role, published reference), supply per player, order book levels, last
+ * trade (when there is one), and the signed-in user's
  * card holdings, reservations and orders, and cash balances from the ledger.
  *
  * From the demo world until their phase moves them to the database:
- * order book levels and last trade (fase 5),
- * trade transactions (fase 5), drops and subscriptions (fase 6), match lines and
+ * the last trade before the first real one (R-46), drops and subscriptions (fase 6), match lines and
  * the previous reference value used for the change column (fase 7).
  * Overlay data is joined by player id, which the seed keeps identical.
  */
 import "server-only";
 import { cache } from "react";
 import { cents, seasonKeyFor } from "@px/domain";
-import { balancesFor, getDb, holdingsFor, listAllPlayersInternal, ordersForUser, supplyFor } from "@px/db";
+import { balancesFor, getDb, holdingsFor, lastTrades, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
 import { demoWorld, type DemoWorld, type Player, type Role } from "@px/demo";
 
 const ROLES = new Set<Role>(["GOALKEEPER", "CENTRE_BACK", "FULL_BACK", "DEFENSIVE_MIDFIELDER", "CENTRAL_MIDFIELDER", "WINGER", "STRIKER"]);
@@ -23,7 +23,13 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
   const overlay = demoWorld();
   const { db } = getDb();
   const season = seasonKeyFor(new Date());
-  const [rows, supply] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season)]);
+  const [rows, supply, levels, trades] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season), orderBookLevels(db), lastTrades(db)]);
+  const book = new Map<string, { bids: { price: ReturnType<typeof cents>; quantity: number }[]; asks: { price: ReturnType<typeof cents>; quantity: number }[] }>();
+  for (const l of levels) {
+    const b = book.get(l.player_id) ?? { bids: [], asks: [] };
+    (l.side === "BUY" ? b.bids : b.asks).push({ price: cents(Number(l.price)), quantity: l.quantity });
+    book.set(l.player_id, b);
+  }
 
   const competitions = new Map<string, DemoWorld["competitions"][number]>();
   const teams = new Map<string, DemoWorld["teams"][number]>();
@@ -67,10 +73,16 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
       primaryAdmission: r.primary_admission as Player["primaryAdmission"],
       marketStatus,
       reference,
-      // Order book and last trade come from the demo overlay until fase 5.
-      bids: marketStatus === "OPEN" ? o?.bids ?? [] : [],
-      asks: marketStatus === "OPEN" ? o?.asks ?? [] : [],
-      lastTrade: marketStatus === "OPEN" ? o?.lastTrade ?? null : null,
+      // Order book from open orders in the database (fase 5). The last trade is
+      // the latest settled execution; before the first real trade the demo
+      // history stands in (R-46).
+      bids: marketStatus === "OPEN" ? book.get(r.id)?.bids ?? [] : [],
+      asks: marketStatus === "OPEN" ? book.get(r.id)?.asks ?? [] : [],
+      lastTrade: (() => {
+        const t = trades.get(r.id);
+        if (t) return { price: cents(t.price), at: t.at };
+        return marketStatus === "OPEN" ? o?.lastTrade ?? null : null;
+      })(),
       supply: {
         inCirculation: s?.in_circulation ?? 0,
         soldThisSeason: s?.sold_this_season ?? 0,

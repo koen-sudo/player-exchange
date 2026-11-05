@@ -1,17 +1,45 @@
 # Projectstatus
 
-Laatst bijgewerkt: 5 november 2026, 23:15. **Fase 0 tot en met 4 zijn opgeleverd.** Volgende fase: 5 (orders en matching). Niets in deze repository is productiegeschikt.
+Laatst bijgewerkt: 6 november 2026, 00:45. **Fase 0 tot en met 5 zijn opgeleverd.** Volgende fase: 6 (primaire uitgifte en toewijzing). Niets in deze repository is productiegeschikt.
 
 ## Wat de producteigenaar nog moet doen
 
 | # | Actie | Blokkeert |
 |---|---|---|
-| 1 | Vraag V-01a: mag de dropprijs tussen donderdag en dinsdag alleen **omlaag**, of **beide kanten op**? | Fase 6 |
-| 2 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets |
-| 3 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
-| 4 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
-| 5 | Een betaalpartner kiezen (O-02) | Fase 8 (sandbox); fase 4 werkt met een simulator |
-| 6 | Stortings- en opnamelimieten bevestigen (A-14: €5–€2.500 per storting, €1–€5.000 per opname) | Niets; nu een configureerbare aanname |
+| 1 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets |
+| 2 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
+| 3 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
+| 4 | Een betaalpartner kiezen (O-02) | Fase 8 (sandbox); fase 4 werkt met een simulator |
+
+## Fase 5 — Orders en matching: opgeleverd
+
+| Oplevering | Status |
+|---|---|
+| Orderpreview op de database, server-side bewaard (60 s, eenmalig) | Klaar |
+| Order plaatsen: alles opnieuw gecontroleerd onder locks; geld of concrete kaarten gereserveerd; vaste servervolgorde | Klaar |
+| Matching: beste prijs, dan oudste order; uitvoering tegen de prijs van de bestaande order; één kaart per uitvoering; geen zelfhandel | Klaar |
+| Afwikkeling via de betaalsimulator: kaart, geld, commissie en orderaantallen in één transactie; maximaal één afwikkeling per markt | Klaar |
+| Herstel: timeout blijft pending, opnieuw indienen met dezelfde sleutel, late bevestiging één keer verwerkt, definitieve fout zonder commissie | Klaar |
+| Annuleren van het vrije restant; verlopen via de worker | Klaar |
+| Worker: verlopen orders, markten matchen, afwikkelingen opvragen | Klaar |
+| Orderboek en laatste transactie uit de database; demo-orderboek met echte reserveringen (R-47) | Klaar |
+| Schermen: plaatsen vanuit het orderpaneel, annuleren en kaartbewegingen op Transacties, beheer Handel | Klaar |
+| API: `POST /order-previews`, `POST /orders`, `POST /orders/{id}/cancel` | Klaar |
+
+### Acceptatie fase 5
+
+| Criterium | Bewijs |
+|---|---|
+| Eén kaart kan nooit twee kopers krijgen | Twee gelijktijdige kopers voor de laatste kaart: precies één uitvoering (integratietest); databaseregels: één open uitvoering per kaart en per markt |
+| Prioriteit en prijs (AT-14, AT-15, AT-16) | Goedkoopste vraag eerst, bij gelijke prijs de oudste, tegen de prijs van de bestaande order; koper krijgt het verschil terug (€10,00 gereserveerd, €9,30 betaald) |
+| Zelfhandel (AT-17) | Kruisende eigen order geweigerd, bestaande order blijft staan |
+| Gedeeltelijke uitvoering (AT-18) | Reservering van het restant klopt tot op de cent |
+| Commissie (BR-20) | €0,50 + €0,50 binnen één order → €0,03 + €0,02 |
+| Annuleren tijdens afwikkeling (AT-19) | Alleen het vrije deel vrijgegeven; het deel in afwikkeling rondt daarna af |
+| Verlopen (AT-20) | Vrij restant verloopt één keer en komt niet terug |
+| Timeout en late bevestiging (AT-21, AT-22) | Geen kaart en geen geld verplaatst bij timeout; opnieuw indienen met dezelfde sleutel; één boeking, ook bij dubbele en late berichten |
+| Definitieve fout (AT-23) | Geen kaartoverdracht, geen commissie, orders krijgen hun deel terug |
+| Invarianten | Handel (5), grootboek (4) en voorraad (5) alle 0 na alle scenario's |
 
 ## Fase 4 — Grootboek en betalingsdemo: opgeleverd
 
@@ -48,11 +76,11 @@ Laatst bijgewerkt: 5 november 2026, 23:15. **Fase 0 tot en met 4 zijn opgeleverd
 
 | Controle | Uitkomst |
 |---|---|
-| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **172 tests geslaagd** (fase 4: +29: grootboek, betalingen, simulator, reconciliatie, limieten, configuratie) |
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **179 tests geslaagd** (fase 5: +16 handel op de database; 9 oude previewtests op de demowereld vervangen door databasetests) |
 | `pnpm test:db` | **Alle constraintcontroles geslaagd** (fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
 | `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces) |
-| `pnpm test:e2e` op verse database (web + worker) | **24 tests geslaagd** (fase 4: +6: terugkeer zonder betalen, betaling met dubbele bevestiging via de worker, mislukte betaling, opnames, niet-geverifieerde gebruiker, beheer en reconciliatie) |
-| Schermen fase 4 | Betalingen en beheer Betalingen bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
+| `pnpm test:e2e` op verse database (web + worker) | **29 tests geslaagd** (fase 5: +5: kopen en direct afwikkelen, verkopen met commissie, annuleren, idempotente orders-API, beheer Handel met reconciliatie) |
+| Schermen fase 4 en 5 | Betalingen, Transacties, spelerpagina en beheer (Betalingen, Handel) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
 
 ## Fase 2 — Catalogus en authenticatie: opgeleverd (met één blokkade)
 
@@ -81,6 +109,7 @@ Laatst bijgewerkt: 5 november 2026, 23:15. **Fase 0 tot en met 4 zijn opgeleverd
 
 ## Eerdere fasen
 
+- **Fase 4** — Grootboek en betalingsdemo: dubbel boekhouden, geldreserveringen, stortingen en opnames via de betaalsimulator, webhook-inbox, reconciliatie (zie ADR 0005).
 - **Fase 3** — Voorraad en portefeuille (acceptatie: cap, reservering en bezit door database én domein bewaakt; portefeuille volgt het werkelijke kaartbezit): edities, programma's met vier-ogengoedkeuring, kaartaanmaak binnen de cap, reserveren, eigendomsoverdracht met event, spelertoelating en marktstatus.
 - **Fase 2** — zie hierboven.
 - **Fase 0** — Dossier, projectfundament, CI. Acceptatie aangetoond met een verse checkout.
@@ -91,18 +120,18 @@ Laatst bijgewerkt: 5 november 2026, 23:15. **Fase 0 tot en met 4 zijn opgeleverd
 | Controle | Reden / planning |
 |---|---|
 | Echte provideradapter en contracttests | O-03; fase 8 voor sandbox |
-| Gelijktijdigheid bij matching en afwikkeling (twee kopers voor de laatste kaart via orders) | Fase 5; kaartaanmaak, kaartreservering en geldreservering zijn al parallel getest |
 | Een echte betaalpartner (sandbox), contracttests en capability-rapport | O-02; fase 8 |
 | Correctieboekingen bij een reconciliatieverschil (nu: verklaren en sluiten met twee personen) | Fase 8 (operationele procedures) |
 | Performance bij 10.000 catalogusspelers | Zoekindex staat er; meting in fase 9 |
 
 ## Bekende beperkingen van deze demo
 
-- Orderboek, laatste transactie, handelstransacties en uitgiftes komen nog uit de demowereld (R-36); ze gaan over in fase 5 (orderboek en transacties) en 6 (uitgiftes). Saldo komt sinds fase 4 uit het grootboek.
-- Orders plaatsen kan nog niet (de knop meldt dat eerlijk); dat komt in fase 5 en gebruikt dan de geldreserveringen uit fase 4.
+- Uitgiftes en inschrijvingen komen nog uit de demowereld; dat wordt fase 6. Saldo, orderboek, orders en transacties komen uit de database.
+- Zolang een speler nog geen echte transactie heeft, is de "laatste verkoop" een demokoers (R-46).
+- De tegenpartij in de demo is een fictieve verzamelaar met echte reserveringen; er is geen marktmaker of platformhandel (BR-23).
 - De betaalpartner is een simulator in dezelfde database (schema `psp_sim`). Er gaat geen echt geld om en er wordt nergens om betaalgegevens gevraagd.
 - Alles is demo: fictieve spelers en clubs, demomodel `demo-v0`, testgeld, lokale testlogin, placeholder-voorwaarden.
 
-## Volgende fase: 5 — Orders en matching
+## Volgende fase: 6 — Primaire uitgifte en toewijzing
 
-Previews, limietorders met geldreservering of kaartreservering, prijs-tijdprioriteit, gedeeltelijke uitvoering, annuleren, verlopen en afwikkeling via de betaalsimulator. Met tests voor gelijktijdigheid, self-trade, commissie en herstel: één kaart kan nooit twee kopers krijgen.
+Drops publiceren (donderdag), inschrijven met geldreservering (dinsdag 09.00–21.00), de prijs mag tot het vastleggen in beide richtingen wijzigen (V-01a), eerlijke willekeurige toewijzing met vastgelegde seed, wachtlijst, afwikkeling en levering van nieuwe kaarten binnen de cap.
