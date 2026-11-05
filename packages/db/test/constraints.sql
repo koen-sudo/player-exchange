@@ -37,8 +37,8 @@ INSERT INTO player_markets(id, player_id, status) VALUES
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'OPEN');
 INSERT INTO editions(id, player_id, season_key) VALUES
   ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '2026-2027');
-INSERT INTO issuance_programs(edition_id, version, planned_total, status, published_at) VALUES
-  ('30000000-0000-0000-0000-000000000001', 1, 500, 'PUBLISHED', now());
+INSERT INTO issuance_programs(edition_id, version, planned_total, status, published_at, is_opening_balance) VALUES
+  ('30000000-0000-0000-0000-000000000001', 1, 500, 'PUBLISHED', now(), true);
 INSERT INTO cards(edition_id, player_id, serial_number)
   SELECT '30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', g FROM generate_series(1, 500) g;
 
@@ -73,6 +73,8 @@ UPDATE cards SET status = 'OWNED', owner_user_id = '00000000-0000-0000-0000-0000
   WHERE serial_number IN (1, 2, 3);
 UPDATE cards SET status = 'OWNED', owner_user_id = '00000000-0000-0000-0000-00000000000b', cost_basis_cents = 600
   WHERE serial_number IN (4);
+INSERT INTO ownership_events(card_id, new_owner_id, cause, reference, cost_basis_cents)
+  SELECT id, owner_user_id, 'OPENING_BALANCE', 'constraint-test', cost_basis_cents FROM cards WHERE status = 'OWNED';
 SELECT pg_temp.expect_error($$INSERT INTO ownership_events(card_id, new_owner_id, cause) SELECT id, '00000000-0000-0000-0000-00000000000a', 'SECONDARY_SETTLEMENT' FROM cards WHERE serial_number = 1$$,
   'ownership change without a linked settlement');
 
@@ -250,5 +252,34 @@ INSERT INTO reconciliation_runs(id, scope, as_of, outcome) VALUES ('b0000000-000
 INSERT INTO reconciliation_breaks(id, run_id, difference_cents, severity) VALUES ('b0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 1500, 'MATERIAL');
 SELECT pg_temp.expect_error($$UPDATE reconciliation_breaks SET status = 'RESOLVED', resolution_note = 'ok', resolved_by = '00000000-0000-0000-0000-00000000000c', approved_by = '00000000-0000-0000-0000-00000000000c'$$,
   'material break cannot be closed by one person');
+
+-- Fase 3: ownership history and programme publication --------------------------------
+DO $$
+BEGIN
+  BEGIN
+    UPDATE cards SET owner_user_id = '00000000-0000-0000-0000-00000000000b' WHERE serial_number = 2;
+    SET CONSTRAINTS ALL IMMEDIATE;
+    RAISE EXCEPTION 'FAIL - owner changed without ownership event';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'ok   - refused: owner change without ownership event [%]', SQLERRM;
+  END;
+END $$;
+
+BEGIN;
+INSERT INTO ownership_events(card_id, previous_owner_id, new_owner_id, cause, reference, cost_basis_cents)
+  SELECT id, owner_user_id, '00000000-0000-0000-0000-00000000000b', 'INCIDENT_CORRECTION', 'constraint-test', 580 FROM cards WHERE serial_number = 2;
+UPDATE cards SET owner_user_id = '00000000-0000-0000-0000-00000000000b' WHERE serial_number = 2;
+COMMIT;
+SELECT pg_temp.expect((SELECT count(*) FROM card_ownership_mismatches) = 0, 'owner change together with event is accepted; no mismatches');
+
+SELECT pg_temp.expect_error($$INSERT INTO ownership_events(card_id, new_owner_id, cause) SELECT id, owner_user_id, 'OPENING_BALANCE' FROM cards WHERE serial_number = 3$$,
+  'opening balance without reference');
+
+SELECT pg_temp.expect_error($$WITH e AS (INSERT INTO editions(player_id, season_key) VALUES ('10000000-0000-0000-0000-000000000001', '2028-2029') RETURNING id)
+  INSERT INTO issuance_programs(edition_id, version, planned_total, status, published_at) SELECT id, 1, 200, 'PUBLISHED', now() FROM e$$,
+  'programme published without approval');
+
+SELECT pg_temp.expect_error($$UPDATE issuance_programs SET planned_total = 400, change_reason = 'te veel uitgegeven' WHERE edition_id = '30000000-0000-0000-0000-000000000001' AND status = 'PUBLISHED'$$,
+  'published programme reduced below existing serial numbers');
 
 \echo 'All database constraint tests passed.'

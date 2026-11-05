@@ -8,6 +8,9 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { demoWorld, type Player } from "./world.ts";
 
+/** Fictitious holder of the delivered demo cards that are not Anna's. Cannot log in (no demo: subject). */
+export const COLLECTOR_ID = "d0000005-0000-4000-8000-000000000099";
+
 const q = (v: string | null | undefined) => (v === null || v === undefined ? "NULL" : `'${v.replace(/'/g, "''")}'`);
 const ts = (d: Date | null | undefined) => (d ? q(d.toISOString()) : "NULL");
 
@@ -25,6 +28,9 @@ export function seedSql(): string {
     out.push(`INSERT INTO provider_team_mappings VALUES ('fixture', ${q(t.id)}, ${q(t.id)});`);
     out.push(`INSERT INTO team_competition_memberships(team_id, competition_id, valid_from) VALUES (${q(t.id)}, ${q(t.competitionId)}, '2026-07-01');`);
   }
+  // A fictitious collector who holds the other delivered demo cards.
+  out.push(`INSERT INTO users(id, auth_subject, is_test_account) VALUES (${q(COLLECTOR_ID)}, 'demo-holder:verzamelaar', true);`);
+  out.push(`INSERT INTO user_profiles(user_id, display_name, residence_country) VALUES (${q(COLLECTOR_ID)}, 'Demo-verzamelaar', 'NL');`);
   for (const u of w.users) {
     out.push(`INSERT INTO users(id, auth_subject, is_test_account, is_staff) VALUES (${q(u.id)}, ${q(`demo:${u.login}`)}, true, ${u.role === "ADMIN"});`);
     out.push(`INSERT INTO user_profiles(user_id, display_name, residence_country, verification_status, age_confirmed) VALUES (${q(u.id)}, ${q(u.displayName)}, ${q(u.residenceCountry)}, ${q(u.verified ? "VERIFIED" : "NOT_STARTED")}, ${u.verified});`);
@@ -47,11 +53,11 @@ export function seedSql(): string {
     if (p.marketStatus !== "OPEN") continue;
     const edition = `e${p.id.slice(1)}`;
     out.push(`INSERT INTO editions(id, player_id, season_key) VALUES (${q(edition)}, ${q(p.id)}, ${q(w.season)});`);
-    out.push(`INSERT INTO issuance_programs(edition_id, version, planned_total, status, published_at) VALUES (${q(edition)}, 1, ${p.supply.plannedThisSeason}, 'PUBLISHED', '2026-04-01T10:00:00Z');`);
-    // Delivered cards are owned by an anonymous demo collector unless Anna holds them.
+    out.push(`INSERT INTO issuance_programs(edition_id, version, planned_total, status, published_at, is_opening_balance) VALUES (${q(edition)}, 1, ${p.supply.plannedThisSeason}, 'PUBLISHED', '2026-04-01T10:00:00Z', true);`);
+    // Delivered cards are owned by a fictitious demo collector unless Anna holds them.
     out.push(
       `INSERT INTO cards(edition_id, player_id, serial_number, status, owner_user_id, cost_basis_cents) ` +
-        `SELECT ${q(edition)}, ${q(p.id)}, g, 'OWNED', ${q(w.users[1]!.id)}, ${p.reference?.amount ?? 100} FROM generate_series(1, ${p.supply.inCirculation}) g;`,
+        `SELECT ${q(edition)}, ${q(p.id)}, g, 'OWNED', ${q(COLLECTOR_ID)}, ${p.reference?.amount ?? 100} FROM generate_series(1, ${p.supply.inCirculation}) g;`,
     );
     cardSeq += p.supply.inCirculation;
   }
@@ -62,6 +68,42 @@ export function seedSql(): string {
       out.push(`UPDATE cards SET owner_user_id = ${q(userId)}, cost_basis_cents = ${c.costCents} FROM editions e WHERE cards.edition_id = e.id AND e.player_id = ${q(c.playerId)} AND cards.serial_number = ${c.serial};`);
     }
   }
+  // Every owned card gets an explicit opening-balance ownership event (fase 3:
+  // ownership only changes together with an event).
+  const acquired = Object.values(w.holdings).flat()
+    .map((c) => `(${q(c.playerId)}::uuid, ${c.serial}, ${ts(c.acquiredAt)}::timestamptz)`).join(", ");
+  out.push(
+    `WITH acq(player_id, serial, at) AS (VALUES ${acquired}) ` +
+      `INSERT INTO ownership_events(card_id, new_owner_id, cause, reference, cost_basis_cents, occurred_at) ` +
+      `SELECT c.id, c.owner_user_id, 'OPENING_BALANCE', 'demo-seed', c.cost_basis_cents, coalesce(acq.at, '2026-10-01T10:00:00Z') ` +
+      `FROM cards c JOIN editions e ON e.id = c.edition_id LEFT JOIN acq ON acq.player_id = e.player_id AND acq.serial = c.serial_number ` +
+      `WHERE c.status = 'OWNED';`,
+  );
+
+  // Anna's orders, so reservations and her order list come from the database.
+  // Cash holds for buy orders follow with the ledger in fase 4.
+  const seqByMarket = new Map<string, number>();
+  for (const o of w.orders) {
+    const seq = (seqByMarket.get(o.playerId) ?? 0) + 1;
+    seqByMarket.set(o.playerId, seq);
+    const state = o.qty.open + o.qty.pending > 0 ? "ACTIVE" : "CLOSED";
+    out.push(
+      `INSERT INTO orders(id, player_market_id, user_id, side, limit_price_cents, time_in_force, state, priority_sequence, qty_original, qty_open, qty_pending, qty_filled, qty_cancelled, qty_expired, accepted_at, expires_at) ` +
+        `SELECT ${q(o.id)}, pm.id, ${q(o.userId)}, ${q(o.side)}, ${o.limitPriceCents}, ${q(o.timeInForce)}, ${q(state)}, ${seq}, ${o.qty.original}, ${o.qty.open}, ${o.qty.pending}, ${o.qty.filled}, ${o.qty.cancelled}, ${o.qty.expired}, ${ts(o.acceptedAt)}, ${ts(o.expiresAt)} ` +
+        `FROM player_markets pm WHERE pm.player_id = ${q(o.playerId)};`,
+    );
+    for (const cardId of o.cardIds) {
+      const held = Object.values(w.holdings).flat().find((c) => c.cardId === cardId)!;
+      out.push(
+        `INSERT INTO order_cards(order_id, card_id, active) SELECT ${q(o.id)}, c.id, ${state === "ACTIVE"} FROM cards c JOIN editions e ON e.id = c.edition_id ` +
+          `WHERE e.player_id = ${q(held.playerId)} AND c.serial_number = ${held.serial};`,
+      );
+    }
+  }
+  for (const [playerId, seq] of seqByMarket) {
+    out.push(`UPDATE player_markets SET next_order_sequence = ${seq + 1} WHERE player_id = ${q(playerId)};`);
+  }
+
   out.push(`-- ${cardSeq} delivered cards`);
   out.push("COMMIT;");
   return out.join("\n");
