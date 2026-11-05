@@ -170,3 +170,63 @@ export async function listTeams(db: Executor, competitionId?: string) {
      GROUP BY t.id, tcm.competition_id ORDER BY t.name`);
   return res.rows.map((r) => ({ id: r.id, name: r.name, competitionId: r.competition_id, players: Number(r.players) }));
 }
+
+/**
+ * Internal (server-side) view of every player for the app's read model:
+ * includes admission state, never sent to clients as-is.
+ */
+export type InternalPlayerRow = {
+  id: string; display_name: string; nationality: string | null; career_status: string; data_quality: string;
+  primary_admission: string; market_status: string; age: number | null; birth_date: string | null; role: string | null;
+  team_id: string | null; team_name: string | null; competition_id: string | null; competition_name: string | null; country_code: string | null;
+  amount_cents: string | null; published_at: string | null; model_version: string | null; is_demo: boolean | null; is_historical: boolean | null;
+};
+
+export async function listAllPlayersInternal(db: Executor): Promise<InternalPlayerRow[]> {
+  const res = await db.execute<InternalPlayerRow>(sql`
+    WITH cur AS (
+      SELECT DISTINCT ON (m.player_id) m.player_id, m.team_id FROM player_team_memberships m
+       WHERE m.valid_to IS NULL ORDER BY m.player_id, (m.membership_type = 'FIRST_TEAM') DESC, m.valid_from DESC
+    ), role AS (
+      SELECT DISTINCT ON (r.player_id) r.player_id, r.role FROM player_roles r WHERE r.valid_to IS NULL
+       ORDER BY r.player_id, r.weight DESC, r.valid_from DESC
+    ), comp AS (
+      SELECT DISTINCT ON (tcm.team_id) tcm.team_id, c.id, c.name, c.country_code
+        FROM team_competition_memberships tcm JOIN competitions c ON c.id = tcm.competition_id
+       WHERE tcm.valid_to IS NULL ORDER BY tcm.team_id, tcm.valid_from DESC
+    )
+    SELECT p.id, p.display_name, p.nationality, p.career_status::text, p.data_quality::text, p.primary_admission::text,
+           coalesce(pm.status::text, 'PROFILE_ONLY') AS market_status, p.birth_date::text AS birth_date,
+           CASE WHEN p.birth_date IS NULL THEN NULL
+                ELSE date_part('year', age((now() AT TIME ZONE 'Europe/Amsterdam')::date, p.birth_date))::int END AS age,
+           role.role, t.id AS team_id, t.name AS team_name, comp.id AS competition_id, comp.name AS competition_name, comp.country_code,
+           prv.amount_cents, prv.published_at, prv.model_version, prv.is_demo, prv.is_historical
+      FROM players p
+      LEFT JOIN cur ON cur.player_id = p.id
+      LEFT JOIN teams t ON t.id = cur.team_id
+      LEFT JOIN comp ON comp.team_id = t.id
+      LEFT JOIN role ON role.player_id = p.id
+      LEFT JOIN player_markets pm ON pm.player_id = p.id
+      LEFT JOIN public_reference_values prv ON prv.player_id = p.id
+     ORDER BY p.display_name, p.id
+     LIMIT 20000`);
+  return res.rows;
+}
+
+export type UserOrderRow = {
+  id: string; player_id: string; side: "BUY" | "SELL"; limit_price_cents: string; time_in_force: "ONE_DAY" | "SEVEN_DAYS" | "THIRTY_DAYS";
+  qty_original: number; qty_open: number; qty_pending: number; qty_filled: number; qty_cancelled: number; qty_expired: number;
+  accepted_at: string | null; expires_at: string | null; card_ids: string[] | null;
+};
+
+/** The signed-in user's own orders (UX-08). */
+export async function ordersForUser(db: Executor, userId: string): Promise<UserOrderRow[]> {
+  const res = await db.execute<UserOrderRow>(sql`
+    SELECT o.id, pm.player_id, o.side::text AS side, o.limit_price_cents, o.time_in_force::text AS time_in_force,
+           o.qty_original, o.qty_open, o.qty_pending, o.qty_filled, o.qty_cancelled, o.qty_expired, o.accepted_at, o.expires_at,
+           (SELECT array_agg(oc.card_id) FROM order_cards oc WHERE oc.order_id = o.id AND oc.active) AS card_ids
+      FROM orders o JOIN player_markets pm ON pm.id = o.player_market_id
+     WHERE o.user_id = ${userId} AND o.state IN ('ACTIVE','CLOSED')
+     ORDER BY o.accepted_at DESC NULLS LAST`);
+  return res.rows;
+}

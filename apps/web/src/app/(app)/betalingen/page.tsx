@@ -1,14 +1,14 @@
-import { demoWorld } from "@px/demo";
 import { Card, DisabledReason, InfoNote, Money, PageTitle, Pill, Stat } from "@/components/ui";
 import { currentUser } from "@/server/session";
 import { LoginRequired } from "@/components/login-required";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Betalingen" };
 
 export default async function PaymentsPage() {
   const user = await currentUser();
   if (!user) return <LoginRequired what="je betalingen" />;
-  const b = demoWorld().balances[user.id] ?? { available: 0, reserved: 0, pendingIncoming: 0 };
+  const b = (await loadWorld((await currentUser())?.id ?? null)).balances[user.id] ?? { available: 0, reserved: 0, pendingIncoming: 0 };
   return (
     <div className="space-y-5">
       <PageTitle title="Betalingen" subtitle="Storten en opnemen lopen via de betaalpartner." />

@@ -89,6 +89,14 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-27 | De publieke catalogus-API toont leeftijd, nooit geboortedatum, en niets over gebruikers. | Privacy; acceptatiecriterium fase 2. |
 | R-28 | De markt-, speler-, portefeuille- en uitgiftepagina's lezen in fase 2 nog uit de demowereld (met dezelfde ID's als de database). Ze schakelen over naar PostgreSQL zodra voorraad (fase 3) en orderboek (fase 5) in de database staan. De catalogus-API en het beheer lezen al uit PostgreSQL. | Eén bron per scherm; geen half gevulde schermen. |
 | R-29 | Een eerste OIDC-login maakt de gebruiker aan (onderwerp `issuer|sub`); nieuwe gebruikers starten ongeverifieerd. | docs/04, BR-07. |
+| R-30 | Een kaart verandert alleen van eigenaar samen met een eigendomsevent; de database controleert dat bij commit. De demo-seed legt bestaand bezit vast als `OPENING_BALANCE` met referentie. | docs/09 invariant "definitieve eigendom heeft een gekoppelde afwikkeling"; een openingsbalans is de expliciete uitzondering voor bezit van vóór het platform (demo of migratie). |
+| R-31 | Publiceren van een uitgifteprogramma gaat via een vier-ogengoedkeuring die eenmalig wordt verbruikt. Wijzigt het concept na goedkeuring, dan vervalt de goedkeuring. Een nieuwe versie vervangt de vorige (`SUPERSEDED`). | docs/10 gevoelige acties, BR-04, AT-34. |
+| R-32 | Een programma mag niet worden verhoogd en niet zakken onder het hoogste al gemaakte kaartnummer. | BR-04, BR-03. |
+| R-33 | Kaarten worden aangemaakt (`mintCards`) binnen het gepubliceerde programma met een lock op de editie; dat gebeurt per drop in fase 6. | Gelijktijdigheidstest: 15 parallelle pogingen geven precies 50 unieke nummers. |
+| R-34 | Toelating tot primaire uitgifte vereist: actief, 18+, voldoende data en (voor echte spelers) vrijgegeven identiteitsrechten (O-10). Marktstatus open of pre-launch vereist toelating of kaarten in omloop; een markt met kaarten kan niet terug naar alleen profiel. | docs/01, BR-06, BR-22, addendum V1.1 gate "Spelersidentiteit". |
+| R-35 | Quarantaine: een identiteitsconflict wordt gekoppeld aan een kandidaat of als nieuw profiel aangemaakt; andere problemen kunnen worden genegeerd. Altijd met reden en audit. | BR-01. |
+| R-36 | Schermen lezen in fase 3 spelers, status, referentie, voorraad, kaartbezit, reserveringen en eigen orders uit PostgreSQL. Orderboek, laatste transactie, saldo, transacties en uitgiftes blijven tot hun fase uit de demowereld (vervangt R-28). | Eén bron per gegeven; zichtbaar in `apps/web/src/server/world.ts`. |
+| R-37 | Een domeinfout kan een specifieke Nederlandse melding meegeven (`details.userMessage`); beheer toont die, de API houdt de generieke foutcode en melding. | Beheerders moeten zien waarom iets wordt geweigerd. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 

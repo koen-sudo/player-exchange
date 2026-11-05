@@ -10,6 +10,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const links: [string, string, boolean][] = [
     ["/beheer", "Overzicht", true],
     ["/beheer/catalogus", "Catalogus", hasPermission(user, "catalog.view")],
+    ["/beheer/spelers", "Spelers", hasPermission(user, "catalog.view")],
+    ["/beheer/voorraad", "Voorraad", hasPermission(user, "catalog.view")],
+    ["/beheer/goedkeuringen", "Goedkeuringen", hasPermission(user, "approvals.decide") || hasPermission(user, "issuance.prepare")],
     ["/beheer/gebruikers", "Gebruikers", hasPermission(user, "users.view")],
     ["/beheer/audit", "Auditlog", hasPermission(user, "audit.view")],
   ];

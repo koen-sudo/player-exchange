@@ -2,7 +2,7 @@
 
 Marktplaats voor digitale voetballerskaarten met echte aankoop- en verkoopprijzen. Gebruikers ontdekken spelers, kopen kaarten bij uitgiftes, volgen hun ontwikkeling en verkopen kaarten aan andere gebruikers. Player Exchange publiceert een eigen referentiewaarde in euro's en ontvangt 5% verkoperscommissie op secundaire verkopen.
 
-> **Status: demo, fase 0, 1 en 2 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
+> **Status: demo, fase 0 tot en met 3 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
 
 ## Snel starten (lokale demo)
 
@@ -53,7 +53,7 @@ De server controleert de configuratie bij het starten (`packages/integrations/sr
 | `apps/web` | Next.js: klantinterface, beheer en `/api/v1` |
 | `apps/worker` | Achtergrondtaken |
 | `packages/domain` | Bedrijfsregels (geld, commissie, matching, toewijzing, seizoenen, limieten) |
-| `packages/db` | SQL-migraties, Drizzle-schema, catalogusimport, identiteit en autorisatie |
+| `packages/db` | SQL-migraties, Drizzle-schema, catalogusimport, identiteit en autorisatie, goedkeuringen, voorraad en eigendom |
 | `packages/demo` | Fictieve demowereld, read models, seed en fixture-dataprovider |
 | `packages/integrations` | Leveranciersneutrale adaptercontracten en modusbewaking |
 | `docs/` | Dossier, besluiten, ADR's, status en wireframes |

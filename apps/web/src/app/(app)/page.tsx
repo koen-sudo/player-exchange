@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { demoWorld, listDrops, listMarket, portfolio } from "@px/demo";
+import { listDrops, listMarket, portfolio } from "@px/demo";
 import { Avatar, Card, Change, Money, PageTitle, Stat } from "@/components/ui";
 import { currentUser } from "@/server/session";
 import { weekdayTime } from "@/lib/format";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Overzicht" };
 
 export default async function OverviewPage() {
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const user = await currentUser();
   const p = user ? portfolio(w, user.id) : null;
   const movers = listMarket(w, { status: "TRADABLE", sort: "change", dir: "desc", pageSize: 5 }).rows;

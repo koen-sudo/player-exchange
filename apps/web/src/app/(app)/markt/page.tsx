@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { demoWorld, listMarket, playerDetail, ROLE_LABELS_NL, type Role } from "@px/demo";
+import { listMarket, playerDetail, ROLE_LABELS_NL, type Role } from "@px/demo";
 import { marketHref, parseMarketParams } from "@/lib/market-params";
 import { Avatar, Card, Change, DataQualityBadge, EmptyState, Money, PageTitle, Pill } from "@/components/ui";
 import { OrderTicket } from "@/components/order-ticket";
 import { currentUser } from "@/server/session";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Markt" };
 
@@ -13,7 +14,7 @@ const withPlayer = (href: string, playerId: string) => `${href}${href.includes("
 
 export default async function MarketPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const filter = parseMarketParams(sp);
   const user = await currentUser();
   const result = listMarket(w, { ...filter, watchlist: new Set<string>() });

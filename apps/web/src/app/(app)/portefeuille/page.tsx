@@ -1,16 +1,17 @@
 import Link from "next/link";
-import { demoWorld, ordersFor, portfolio, transactionsFor } from "@px/demo";
+import { ordersFor, portfolio, transactionsFor } from "@px/demo";
 import { Avatar, Card, EmptyState, InfoNote, Money, PageTitle, Pill, Stat, buttonPrimary, buttonSecondary } from "@/components/ui";
 import { currentUser } from "@/server/session";
 import { dateOnly, euro } from "@/lib/format";
 import { LoginRequired } from "@/components/login-required";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Portefeuille" };
 
 export default async function PortfolioPage() {
   const user = await currentUser();
   if (!user) return <LoginRequired what="je portefeuille" />;
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const p = portfolio(w, user.id);
   const orders = ordersFor(w, user.id).filter((o) => o.qty.open > 0 || o.qty.pending > 0);
   const tx = transactionsFor(w, user.id).slice(0, 5);

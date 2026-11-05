@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { demoWorld, playerDetail } from "@px/demo";
+import { playerDetail } from "@px/demo";
 import { Avatar, Card, Change, DataQualityBadge, Money, Pill, InfoNote } from "@/components/ui";
 import { OrderTicket } from "@/components/order-ticket";
 import { currentUser } from "@/server/session";
 import { dateTime, weekdayTime, euro } from "@/lib/format";
+import { loadWorld } from "@/server/world";
 
 type Props = { params: Promise<{ playerId: string }>; searchParams: Promise<Record<string, string | undefined>> };
 
 export async function generateMetadata({ params }: Props) {
   const { playerId } = await params;
-  const d = playerDetail(demoWorld(), playerId);
+  const d = playerDetail(await loadWorld(null), playerId);
   return { title: d ? d.name : "Speler niet gevonden" };
 }
 
@@ -24,7 +25,7 @@ const TABS = [
 export default async function PlayerPage({ params, searchParams }: Props) {
   const { playerId } = await params;
   const { tab = "overzicht" } = await searchParams;
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const d = playerDetail(w, playerId);
   if (!d) notFound();
   const user = await currentUser();

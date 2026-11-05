@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { demoWorld, listDrops, type DropTab } from "@px/demo";
+import { listDrops, type DropTab } from "@px/demo";
 import { Avatar, EmptyState, InfoNote, Money, PageTitle, Pill } from "@/components/ui";
 import { SubscribeFlow } from "@/components/subscribe-flow";
 import { currentUser } from "@/server/session";
 import { euro, timeOnly, weekdayTime } from "@/lib/format";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Uitgiftes" };
 
@@ -15,7 +16,7 @@ type SP = Promise<Record<string, string | undefined>>;
 export default async function DropsPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const tab = (TABS.find(([k]) => k === sp.tab)?.[0] ?? "binnenkort") as DropTab;
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const user = await currentUser();
   const comp = w.competitions.find((c) => c.id === sp.competitie);
   const rows = listDrops(w, tab, user?.id, comp?.id);

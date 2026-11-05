@@ -1,6 +1,6 @@
 # Projectstatus
 
-Laatst bijgewerkt: 5 november 2026, 21:30. **Fase 0, 1 en 2 zijn opgeleverd.** Volgende fase: 3 (voorraad en portefeuille). Niets in deze repository is productiegeschikt.
+Laatst bijgewerkt: 5 november 2026, 22:00. **Fase 0 tot en met 3 zijn opgeleverd.** Volgende fase: 4 (grootboek en betalingsdemo). Niets in deze repository is productiegeschikt.
 
 ## Wat de producteigenaar nog moet doen
 
@@ -8,8 +8,43 @@ Laatst bijgewerkt: 5 november 2026, 21:30. **Fase 0, 1 en 2 zijn opgeleverd.** V
 |---|---|---|
 | 1 | Vraag V-01a: mag de dropprijs tussen donderdag en dinsdag alleen **omlaag**, of **beide kanten op**? | Fase 6 |
 | 2 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets |
-| 3 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter in fase 2; tot die tijd draait de import op de fictieve fixtureprovider |
-| 4 | Een identiteitsprovider kiezen (O-06) | Echte verificatie; in demo is de verificatiestatus vast |
+| 3 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
+| 4 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
+| 5 | Een betaalpartner kiezen (O-02) | Fase 8 (sandbox); fase 4 werkt met een simulator |
+
+## Fase 3 — Voorraad en portefeuille: opgeleverd
+
+| Oplevering | Status |
+|---|---|
+| Edities per speler per seizoen, uitgifteprogramma's met versies | Klaar |
+| Publiceren van een programma via vier-ogengoedkeuring (aanvragen, beslissen door een ander, eenmalig uitvoeren, vervalt bij wijziging) | Klaar |
+| Kaarten aanmaken binnen programma en cap van 500, met lock op de editie | Klaar (gebruikt in fase 6) |
+| Reserveren en vrijgeven van kaarten voor verkoop | Klaar (gebruikt in fase 5) |
+| Eigendomsoverdracht met event en kostenbasis; database weigert eigenaarswissel zonder event | Klaar |
+| Invariantcontrole (eigendom, programma, cap, reserveringen) | Klaar |
+| Spelertoelating en marktstatus met redenen en audit | Klaar |
+| Quarantaine afhandelen (koppelen, nieuw profiel, negeren) | Klaar |
+| Beheer: Spelers, Voorraad, Goedkeuringen; quarantaine op Catalogus | Klaar |
+| Portefeuille, voorraadblok, marktstatus en eigen orders uit PostgreSQL | Klaar |
+
+### Acceptatie fase 3
+
+| Criterium | Bewijs |
+|---|---|
+| Cap, reservering en bezit worden door database én domeinlaag bewaakt | Databaseconstraints (50 controles) plus servicechecks; gelijktijdigheidstests op echte PostgreSQL: 15 parallelle aanmaakpogingen leveren precies kaartnummers 1–50, twee gelijktijdige reserveringen van dezelfde kaart leveren precies één winnaar (AT-06, AT-07, AT-13) |
+| Portefeuille volgt het werkelijke kaartbezit | Portefeuille leest Anna's 6 specifieke kaarten, kostenbasis €30,60 en de gereserveerde kaart uit de database (integratie- en e2e-test) |
+
+## Werkelijk uitgevoerde controles
+
+5 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
+
+| Controle | Uitkomst |
+|---|---|
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **143 tests geslaagd** (fase 3: +21) |
+| `pnpm test:db` | **50 constraintcontroles geslaagd** (fase 3: +5) |
+| `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces, 27 routes) |
+| `pnpm test:e2e` op verse database (web + worker) | **18 tests geslaagd** (fase 3: +3: portefeuille uit database, vier-ogenpublicatie met audit, toelating geweigerd voor minderjarige en marktpauze sluit handel) |
+| Schermen beheer fase 3 | Bekeken op 1440 px |
 
 ## Fase 2 — Catalogus en authenticatie: opgeleverd (met één blokkade)
 
@@ -36,24 +71,9 @@ Laatst bijgewerkt: 5 november 2026, 21:30. **Fase 0, 1 en 2 zijn opgeleverd.** V
 | Transfers veroorzaken geen duplicaten | Transfer van Eredivisie naar Premier League: zelfde speler-ID, zelfde markt, kaarten en eigenaren ongewijzigd, oud lidmaatschap afgesloten (AT-03) |
 | Privégegevens blijven privé | Publieke API zonder geboortedata en zonder gebruikersgegevens; `/me` alleen over de ingelogde gebruiker; beheer alleen met het juiste recht |
 
-## Werkelijk uitgevoerde controles
-
-5 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
-
-| Controle | Uitkomst |
-|---|---|
-| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **122 tests geslaagd** (fase 2: +46) |
-| `pnpm test:db` | **45 constraintcontroles geslaagd** |
-| `pnpm typecheck` | **6 van 6 workspaces geslaagd** |
-| `pnpm build` | **Geslaagd**, 24 routes |
-| `pnpm test:e2e` (web + worker tegen geseede database) | **15 tests geslaagd**: 8 uit fase 1, 7 nieuw (catalogus-API en privacy, `/me`, rechten in beheer, import via beheer die de worker afrondt, handelsstop met audit, geen zelfbeperking) |
-| Eerste import op verse demodatabase | 240 ongewijzigd, 0 nieuw, 0 bijgewerkt |
-| Schermen beheer | Bekeken op 1440 en 390 px |
-
-Belangrijke tests per acceptatiecriterium: AT-01 (zes competities), AT-02 (herimport zonder duplicaten), AT-03 (transfer behoudt ID, kaarten en markt), AT-04 (gedeeltelijke import verwijdert niets), AT-08 (niet-toegelaten gebruiker), AT-29 (concept-waardering niet publiek), AT-33 (beheeracties met actor en reden).
-
 ## Eerdere fasen
 
+- **Fase 2** — zie hierboven.
 - **Fase 0** — Dossier, projectfundament, CI. Acceptatie aangetoond met een verse checkout.
 - **Fase 1** — Huisstijl en demo-interface; WF-01 en WF-02 werken op 390, 768 en 1440 px.
 
@@ -62,15 +82,15 @@ Belangrijke tests per acceptatiecriterium: AT-01 (zes competities), AT-02 (herim
 | Controle | Reden / planning |
 |---|---|
 | Echte provideradapter en contracttests | O-03; fase 8 voor sandbox |
-| Gelijktijdigheidstest met parallelle verbindingen op kaarten (AT-07) | Fase 3/5 |
+| Gelijktijdigheid bij matching en afwikkeling (twee kopers voor de laatste kaart via orders) | Fase 5; kaartaanmaak en reservering zijn in fase 3 al parallel getest |
 | Performance bij 10.000 catalogusspelers | Zoekindex staat er; meting in fase 9 |
 
 ## Bekende beperkingen van deze demo
 
-- Markt-, speler-, portefeuille- en uitgiftepagina's lezen nog uit de demowereld (R-28). Ze gaan over op PostgreSQL in fase 3 (voorraad) en fase 5 (orderboek).
-- Problemen in quarantaine zijn zichtbaar maar kunnen nog niet worden afgehandeld; de beoordelingsflow volgt met fase 3 (spelertoelating).
+- Orderboek, laatste transactie, saldo, transacties en uitgiftes komen nog uit de demowereld (R-36); ze gaan over in fase 4 (saldo), 5 (orderboek en transacties) en 6 (uitgiftes).
+- Anna's kooporder staat in de database maar heeft nog geen geldreservering in het grootboek; die volgt in fase 4.
 - Alles is demo: fictieve spelers en clubs, demomodel `demo-v0`, testgeld, lokale testlogin, placeholder-voorwaarden.
 
-## Volgende fase: 3 — Voorraad en portefeuille
+## Volgende fase: 4 — Grootboek en betalingsdemo
 
-Edities, kaartserienummers, eigendomshistorie, voorraadprogramma's en kostenbasis in PostgreSQL. Spelertoelating en afhandeling van quarantaine in beheer. De voorraad- en portefeuilleschermen gaan dan over op de database.
+Dubbel boekhouden voor klantgeld (beschikbaar, gereserveerd, in afwikkeling), reserveringen, stortingen en opnames, inbox/outbox en een deterministische betaalsimulator die succes, vertraging, dubbele berichten, fouten en onbekende uitkomsten kan nabootsen. Het saldo op de schermen gaat dan over op de database.

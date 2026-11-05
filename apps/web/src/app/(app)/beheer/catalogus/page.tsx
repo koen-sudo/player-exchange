@@ -1,10 +1,10 @@
-import { catalogCoverage, getDb, listImportRuns, listOpenImportIssues } from "@px/db";
+import { catalogCoverage, getDb, listImportRuns, listOpenIssuesWithCandidates } from "@px/db";
 import { Card, DisabledReason, PageTitle, Pill } from "@/components/ui";
 import { Flash } from "@/components/flash";
 import { NotAllowed } from "@/components/login-required";
 import { currentUser, hasPermission } from "@/server/session";
 import { dateTime } from "@/lib/format";
-import { startCatalogImport } from "../actions";
+import { resolveIssue, startCatalogImport } from "../actions";
 
 export const metadata = { title: "Catalogus" };
 export const dynamic = "force-dynamic";
@@ -20,7 +20,8 @@ export default async function CatalogAdminPage({ searchParams }: { searchParams:
   if (!hasPermission(user, "catalog.view")) return <NotAllowed />;
   const sp = await searchParams;
   const { db } = getDb();
-  const [cov, runs, issues] = await Promise.all([catalogCoverage(db), listImportRuns(db), listOpenImportIssues(db)]);
+  const [cov, runs, issues] = await Promise.all([catalogCoverage(db), listImportRuns(db), listOpenIssuesWithCandidates(db)]);
+  const canResolve = hasPermission(user, "catalog.resolve_issue");
   const canImport = hasPermission(user, "catalog.import");
 
   return (
@@ -82,16 +83,32 @@ export default async function CatalogAdminPage({ searchParams }: { searchParams:
 
       <Card title={`Quarantaine (${issues.length})`}>
         {issues.length === 0 ? <p className="text-sm text-muted">Geen openstaande importproblemen.</p> : (
-          <ul className="divide-y divide-line text-sm">
+          <ul className="space-y-3 text-sm">
             {issues.map((i) => (
-              <li key={i.id} className="flex flex-wrap justify-between gap-2 px-2 py-2">
-                <span><Pill tone="amber">{ISSUE_LABEL[i.kind] ?? i.kind}</Pill> <span className="ml-2">{String(i.detail.name ?? i.external_id ?? "")}</span></span>
-                <span className="text-muted">{dateTime(i.created_at)}</span>
+              <li key={i.id} className="rounded-lg border border-line p-3">
+                <p className="flex flex-wrap items-center gap-2"><Pill tone="amber">{ISSUE_LABEL[i.kind] ?? i.kind}</Pill><span className="font-medium">{String(i.detail.name ?? i.external_id ?? "")}</span><span className="text-muted">bron-ID {i.external_id} · {dateTime(i.created_at)}</span></p>
+                {i.candidates && i.candidates.length > 0 && (
+                  <p className="mt-1 text-muted">Lijkt op: {i.candidates.map((c) => `${c.name} (${c.team ?? "geen club"})`).join(", ")}</p>
+                )}
+                {canResolve && (
+                  <form action={resolveIssue} className="mt-2 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="issueId" value={i.id} />
+                    <label><span className="block text-xs text-muted">Besluit</span>
+                      <select name="choice" className="mt-1 rounded-lg border border-line px-2 py-1.5">
+                        {i.kind === "CONFLICTING_MATCH" && (i.candidates ?? []).map((c) => <option key={c.id} value={c.id}>Zelfde persoon als {c.name}</option>)}
+                        {i.kind === "CONFLICTING_MATCH" && <option value="CREATE_NEW">Andere persoon: nieuw profiel</option>}
+                        <option value="IGNORE">Negeren</option>
+                      </select></label>
+                    <label className="min-w-48 flex-1"><span className="block text-xs text-muted">Reden</span>
+                      <input name="reason" required minLength={5} className="mt-1 w-full rounded-lg border border-line px-2 py-1.5" /></label>
+                    <button className="rounded-lg bg-primary px-3 py-1.5 font-semibold text-white">Afhandelen</button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs text-muted">Een mogelijke dubbele identiteit wordt nooit automatisch samengevoegd. Afhandelen volgt met de beoordelingsflow.</p>
+        <p className="mt-2 text-xs text-muted">Een mogelijke dubbele identiteit wordt nooit automatisch samengevoegd; een beheerder beslist.</p>
       </Card>
     </div>
   );

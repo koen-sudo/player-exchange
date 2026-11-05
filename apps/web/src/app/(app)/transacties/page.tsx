@@ -1,8 +1,9 @@
-import { demoWorld, ordersFor, transactionsFor, type OrderView } from "@px/demo";
+import { ordersFor, transactionsFor, type OrderView } from "@px/demo";
 import { Avatar, Card, PageTitle, Pill } from "@/components/ui";
 import { currentUser } from "@/server/session";
 import { LoginRequired } from "@/components/login-required";
 import { dateTime, euro } from "@/lib/format";
+import { loadWorld } from "@/server/world";
 
 export const metadata = { title: "Transacties" };
 
@@ -11,7 +12,7 @@ const KIND = { PRIMARY_PURCHASE: "Uitgifte", SECONDARY_PURCHASE: "Aankoop", SECO
 export default async function TransactionsPage() {
   const user = await currentUser();
   if (!user) return <LoginRequired what="je orders en transacties" />;
-  const w = demoWorld();
+  const w = await loadWorld((await currentUser())?.id ?? null);
   const orders = ordersFor(w, user.id);
   const groups: [string, OrderView[]][] = [
     ["Open orders", orders.filter((o) => o.status === "OPEN")],

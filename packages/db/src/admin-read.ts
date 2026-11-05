@@ -70,3 +70,13 @@ export async function listAuditEvents(db: Executor, limit = 100) {
      ORDER BY a.occurred_at DESC LIMIT ${limit}`);
   return res.rows;
 }
+
+export async function listOpenIssuesWithCandidates(db: Executor, limit = 50) {
+  const res = await db.execute<{ id: string; kind: string; external_id: string | null; detail: Record<string, unknown>; created_at: string; candidates: { id: string; name: string; birth_date: string | null; team: string | null }[] | null }>(sql`
+    SELECT i.id, i.kind, i.external_id, i.detail, i.created_at,
+           (SELECT json_agg(json_build_object('id', p.id, 'name', p.display_name, 'birth_date', p.birth_date,
+                    'team', (SELECT t.name FROM player_team_memberships m JOIN teams t ON t.id = m.team_id WHERE m.player_id = p.id AND m.valid_to IS NULL LIMIT 1)))
+              FROM players p WHERE p.id::text IN (SELECT jsonb_array_elements_text(coalesce(i.detail -> 'candidates', '[]'::jsonb)))) AS candidates
+      FROM import_issues i WHERE i.resolution = 'OPEN' ORDER BY i.created_at DESC LIMIT ${limit}`);
+  return res.rows;
+}

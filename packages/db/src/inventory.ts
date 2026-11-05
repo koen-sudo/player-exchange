@@ -246,3 +246,23 @@ export async function inventoryInvariants(db: Executor) {
         WHERE oc.active AND c.owner_user_id IS DISTINCT FROM o.user_id)::int AS unowned_reserved`)).rows[0]!;
   return { ownershipMismatches: r.mismatches, cardsOverProgramme: r.over_programme, editionsOverCap: r.over_cap, cardsMultiReserved: r.multi_reserved, reservedNotOwned: r.unowned_reserved };
 }
+
+/** Admin overview of a player's editions, programme versions and approvals. */
+export async function programmeOverview(db: Executor, playerId: string) {
+  const res = await db.execute<{
+    edition_id: string; season_key: string; programme_id: string | null; version: number | null; planned_total: number | null;
+    status: string | null; change_reason: string | null; published_at: string | null;
+    approval_id: string | null; approval_status: string | null; cards_total: number; cards_owned: number; cards_platform: number;
+  }>(sql`
+    SELECT e.id AS edition_id, e.season_key, ip.id AS programme_id, ip.version, ip.planned_total, ip.status::text AS status,
+           ip.change_reason, ip.published_at,
+           (SELECT a.id FROM admin_approvals a WHERE a.action_type = 'PUBLISH_PROGRAMME' AND a.payload ->> 'programmeId' = ip.id::text ORDER BY a.created_at DESC LIMIT 1) AS approval_id,
+           (SELECT a.status FROM admin_approvals a WHERE a.action_type = 'PUBLISH_PROGRAMME' AND a.payload ->> 'programmeId' = ip.id::text ORDER BY a.created_at DESC LIMIT 1) AS approval_status,
+           (SELECT count(*) FROM cards c WHERE c.edition_id = e.id)::int AS cards_total,
+           (SELECT count(*) FROM cards c WHERE c.edition_id = e.id AND c.status = 'OWNED')::int AS cards_owned,
+           (SELECT count(*) FROM cards c WHERE c.edition_id = e.id AND c.status = 'PLATFORM_INVENTORY')::int AS cards_platform
+      FROM editions e LEFT JOIN issuance_programs ip ON ip.edition_id = e.id
+     WHERE e.player_id = ${playerId}
+     ORDER BY e.season_key DESC, ip.version DESC`);
+  return res.rows;
+}

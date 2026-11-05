@@ -11,13 +11,24 @@ import { redirect } from "next/navigation";
 import { DomainError } from "@px/domain";
 import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTION_TYPES_LIST } from "@px/db";
 import { currentUser } from "@/server/session";
+import {
+  createDraftProgramme,
+  decideApproval,
+  publishProgramme,
+  requestProgrammePublication,
+  resolveImportIssue,
+  setMarketStatus,
+  setPrimaryAdmission,
+  type MarketStatus,
+  type PrimaryAdmission,
+} from "@px/db";
 
 class FormError extends Error {}
 
 function fail(path: string, e: unknown): never {
   const msg = e instanceof FormError ? e.message : e instanceof DomainError ? e.userMessage : "Er ging iets mis. Er is niets gewijzigd.";
   if (!(e instanceof DomainError) && !(e instanceof FormError)) console.error(JSON.stringify({ level: "error", msg: "admin action failed", error: String(e) }));
-  redirect(`${path}?fout=${encodeURIComponent(msg)}`);
+  redirect(`${path}${path.includes("?") ? "&" : "?"}fout=${encodeURIComponent(msg)}`);
 }
 
 export async function startCatalogImport(formData: FormData) {
@@ -69,4 +80,83 @@ export async function liftRestriction(formData: FormData) {
   }
   revalidatePath("/beheer/gebruikers");
   redirect(`/beheer/gebruikers?melding=${encodeURIComponent("Beperking beëindigd en vastgelegd in de auditlog.")}`);
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3: players, programmes, approvals, quarantine
+// ---------------------------------------------------------------------------
+
+
+const str = (f: FormData, k: string) => String(f.get(k) ?? "");
+function done(path: string, note: string): never {
+  revalidatePath(path);
+  redirect(`${path}${path.includes("?") ? "&" : "?"}melding=${encodeURIComponent(note)}`);
+}
+async function guarded(path: string, fn: (user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) => Promise<string>): Promise<never> {
+  const user = await currentUser();
+  if (!user) redirect("/login");
+  let note: string;
+  try {
+    note = await fn(user);
+  } catch (e) {
+    fail(path, e);
+  }
+  done(path, note);
+}
+
+export async function changeAdmission(formData: FormData) {
+  const back = `/beheer/spelers?q=${encodeURIComponent(str(formData, "q"))}`;
+  await guarded(back, async (user) => {
+    await setPrimaryAdmission(getDb().db, user, { playerId: str(formData, "playerId"), admission: str(formData, "admission") as PrimaryAdmission, reason: str(formData, "reason") });
+    return "Toelating gewijzigd en vastgelegd in de auditlog.";
+  });
+}
+
+export async function changeMarketStatus(formData: FormData) {
+  const back = `/beheer/spelers?q=${encodeURIComponent(str(formData, "q"))}`;
+  await guarded(back, async (user) => {
+    await setMarketStatus(getDb().db, user, { playerId: str(formData, "playerId"), status: str(formData, "status") as MarketStatus, reason: str(formData, "reason") });
+    return "Marktstatus gewijzigd en vastgelegd in de auditlog.";
+  });
+}
+
+export async function draftProgramme(formData: FormData) {
+  const playerId = str(formData, "playerId");
+  await guarded(`/beheer/voorraad?speler=${playerId}`, async (user) => {
+    const planned = Number(str(formData, "plannedTotal"));
+    if (!Number.isInteger(planned)) throw new FormError("Vul een geheel aantal kaarten in.");
+    await createDraftProgramme(getDb().db, user, { playerId, seasonKey: str(formData, "seasonKey"), plannedTotal: planned, reason: str(formData, "reason") });
+    return "Concept aangemaakt. Vraag goedkeuring aan om te publiceren.";
+  });
+}
+
+export async function askProgrammeApproval(formData: FormData) {
+  await guarded(`/beheer/voorraad?speler=${str(formData, "playerId")}`, async (user) => {
+    await requestProgrammePublication(getDb().db, user, { programmeId: str(formData, "programmeId"), reason: str(formData, "reason") });
+    return "Goedkeuring aangevraagd. Een tweede bevoegde persoon moet akkoord geven.";
+  });
+}
+
+export async function publishApprovedProgramme(formData: FormData) {
+  await guarded(`/beheer/voorraad?speler=${str(formData, "playerId")}`, async (user) => {
+    await publishProgramme(getDb().db, user, { programmeId: str(formData, "programmeId"), approvalId: str(formData, "approvalId") });
+    return "Programma gepubliceerd.";
+  });
+}
+
+export async function decide(formData: FormData) {
+  await guarded("/beheer/goedkeuringen", async (user) => {
+    const decision = str(formData, "decision") === "APPROVE" ? "APPROVE" : "REJECT";
+    await decideApproval(getDb().db, user, { approvalId: str(formData, "approvalId"), decision, reason: str(formData, "reason") });
+    return decision === "APPROVE" ? "Goedgekeurd." : "Afgewezen.";
+  });
+}
+
+export async function resolveIssue(formData: FormData) {
+  await guarded("/beheer/catalogus", async (user) => {
+    const choice = str(formData, "choice");
+    const resolution = choice === "IGNORE" ? { kind: "IGNORE" as const } : choice === "CREATE_NEW" ? { kind: "CREATE_NEW" as const } : { kind: "LINK" as const, playerId: choice };
+    await resolveImportIssue(getDb().db, user, { issueId: str(formData, "issueId"), resolution, reason: str(formData, "reason") });
+    return "Importprobleem afgehandeld en vastgelegd in de auditlog.";
+  });
 }

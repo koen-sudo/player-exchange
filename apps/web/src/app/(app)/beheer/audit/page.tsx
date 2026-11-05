@@ -12,6 +12,17 @@ const ACTION_LABEL: Record<string, string> = {
   USER_RESTRICTION_ADDED: "Beperking ingesteld",
   USER_RESTRICTION_ENDED: "Beperking beëindigd",
   PAUSE_MARKET: "Markt gepauzeerd",
+  PLAYER_ADMISSION_CHANGED: "Spelertoelating gewijzigd",
+  MARKET_STATUS_CHANGED: "Marktstatus gewijzigd",
+  PROGRAMME_DRAFTED: "Uitgifteprogramma (concept) gemaakt",
+  PROGRAMME_DRAFT_CHANGED: "Concept-programma gewijzigd",
+  PROGRAMME_PUBLISHED: "Uitgifteprogramma gepubliceerd",
+  APPROVAL_REQUESTED: "Goedkeuring aangevraagd",
+  APPROVAL_GRANTED: "Goedkeuring verleend",
+  APPROVAL_REJECTED: "Goedkeuring afgewezen",
+  IMPORT_ISSUE_LINK: "Importprobleem gekoppeld aan speler",
+  IMPORT_ISSUE_CREATE_NEW: "Importprobleem: nieuw profiel",
+  IMPORT_ISSUE_IGNORE: "Importprobleem genegeerd",
 };
 
 export default async function AuditPage() {
