@@ -29,7 +29,8 @@ test.describe("markt", () => {
     await page.waitForURL(/\/uitgiftes/);
     await page.goBack();
     await expect(page).toHaveURL(/status=TRADABLE/);
-    await expect(page.getByLabel("Positie")).toHaveValue("WINGER");
+    // Next.js keeps the previous route mounted but hidden; check the visible main content only.
+    await expect(page.getByRole("main").getByLabel("Positie")).toHaveValue("WINGER");
   });
 
   test("profiel zonder kaarten toont geen verzonnen prijs (AT-05)", async ({ page }) => {
