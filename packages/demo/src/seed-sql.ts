@@ -104,6 +104,33 @@ export function seedSql(): string {
     out.push(`UPDATE player_markets SET next_order_sequence = ${seq + 1} WHERE player_id = ${q(playerId)};`);
   }
 
+  // Fase 4: payment accounts, ledger opening balances and holds for open buy orders.
+  for (const u of w.users.filter((x) => x.verified)) {
+    out.push(`INSERT INTO payment_accounts(user_id, provider, provider_account_id, status, display_ref) VALUES (${q(u.id)}, 'demo', ${q(`demo-acct-${u.login}`)}, 'ACTIVE', 'NL•• DEMO •••• ${String(u.login.length * 1111).padStart(4, "0")}');`);
+  }
+  const acct = (type: string, userId: string | null) =>
+    `(SELECT id FROM ledger_accounts WHERE type = '${type}' AND owner_user_id ${userId ? `= ${q(userId)}` : "IS NULL"})`;
+  const entry = (eventId: string, kind: string, lines: [string, "DEBIT" | "CREDIT", number][]) => {
+    out.push(`INSERT INTO journal_entries(business_event_id, kind, source, environment) VALUES (${q(eventId)}, ${q(kind)}, 'demo-seed', 'demo');`);
+    for (const [account, side, amount] of lines) {
+      out.push(`INSERT INTO journal_lines(journal_entry_id, ledger_account_id, side, amount_cents) VALUES ((SELECT id FROM journal_entries WHERE business_event_id = ${q(eventId)}), ${account}, '${side}', ${amount});`);
+    }
+  };
+  for (const [userId, bal] of Object.entries(w.balances)) {
+    const holds = w.orders.filter((o) => o.userId === userId && o.side === "BUY" && o.qty.open > 0).map((o) => ({ order: o, amount: o.qty.open * o.limitPriceCents }));
+    const opening = bal.available + holds.reduce((n, h) => n + h.amount, 0);
+    if (opening === 0) continue;
+    out.push(`INSERT INTO ledger_accounts(type, owner_user_id) VALUES ('CUSTOMER_AVAILABLE', ${q(userId)}), ('CUSTOMER_RESERVED', ${q(userId)}) ON CONFLICT DO NOTHING;`);
+    entry(`opening:${userId}:demo-seed`, "OPENING_BALANCE", [[acct("PSP_SETTLEMENT_ASSET", null), "DEBIT", opening], [acct("CUSTOMER_AVAILABLE", userId), "CREDIT", opening]]);
+    // The simulated provider holds the same money, so reconciliation agrees from the start.
+    out.push(`INSERT INTO psp_sim.operations(idempotency_key, reference, kind, account_ref, amount_cents, status, scenario, resolved_at) VALUES (${q(`opening-${userId}`)}, ${q(`sim-opening-${userId.slice(-6)}`)}, 'DEPOSIT', ${q(`user:${userId}`)}, ${opening}, 'SUCCEEDED', 'OPENING_BALANCE', now());`);
+    for (const h of holds) {
+      const holdId = `c${h.order.id.slice(1)}`;
+      out.push(`INSERT INTO cash_holds(id, user_id, purpose, order_id, requested_amount_cents, confirmed_amount_cents, status) VALUES (${q(holdId)}, ${q(userId)}, 'BUY_ORDER', ${q(h.order.id)}, ${h.amount}, ${h.amount}, 'ACTIVE');`);
+      entry(`hold:${holdId}:active`, "HOLD", [[acct("CUSTOMER_AVAILABLE", userId), "DEBIT", h.amount], [acct("CUSTOMER_RESERVED", userId), "CREDIT", h.amount]]);
+    }
+  }
+
   out.push(`-- ${cardSeq} delivered cards`);
   out.push("COMMIT;");
   return out.join("\n");

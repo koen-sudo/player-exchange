@@ -128,8 +128,9 @@ SELECT pg_temp.expect_error($$INSERT INTO settlement_operations(type, idempotenc
   'stable idempotency key used twice');
 
 -- Ledger --------------------------------------------------------------------------
+-- The platform PSP account exists from migration 0005; give it a fixed id for this test.
+UPDATE ledger_accounts SET id = '60000000-0000-0000-0000-000000000001' WHERE type = 'PSP_SETTLEMENT_ASSET' AND owner_user_id IS NULL;
 INSERT INTO ledger_accounts(id, type, owner_user_id) VALUES
-  ('60000000-0000-0000-0000-000000000001', 'PSP_SETTLEMENT_ASSET', NULL),
   ('60000000-0000-0000-0000-00000000000a', 'CUSTOMER_AVAILABLE', '00000000-0000-0000-0000-00000000000b'),
   ('60000000-0000-0000-0000-00000000000b', 'CUSTOMER_RESERVED', '00000000-0000-0000-0000-00000000000b');
 SELECT pg_temp.expect_error($$INSERT INTO ledger_accounts(type, owner_user_id) VALUES ('CUSTOMER_AVAILABLE', '00000000-0000-0000-0000-00000000000b')$$,
