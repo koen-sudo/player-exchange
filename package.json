@@ -1,0 +1,24 @@
+{
+  "name": "player-exchange",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:domain": "node --test packages/domain/test/*.test.ts packages/demo/test/*.test.ts packages/integrations/test/*.test.ts apps/web/test/*.test.ts",
+    "test:db": "bash scripts/test-db.sh",
+    "db:migrate": "bash scripts/migrate.sh",
+    "db:seed": "node packages/demo/src/seed-sql.ts | psql -v ON_ERROR_STOP=1 -q",
+    "check:env": "node packages/integrations/src/env-check.ts"
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^5.9",
+    "@types/node": "^22"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@px/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bash ../../scripts/test-db.sh",
+    "db:migrate": "bash ../../scripts/migrate.sh"
+  }
+}

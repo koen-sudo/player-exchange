@@ -1,0 +1,24 @@
+# Local services for demo and development. Never used for production.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: px
+      POSTGRES_PASSWORD: px
+      POSTGRES_DB: px_demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U px -d px_demo"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
