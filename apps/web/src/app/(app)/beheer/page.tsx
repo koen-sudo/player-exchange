@@ -1,53 +1,56 @@
-import { demoWorld } from "@px/demo";
+import Link from "next/link";
+import { catalogCoverage, getDb } from "@px/db";
 import { Card, PageTitle, Pill } from "@/components/ui";
-import { currentUser, hasAdminRole } from "@/server/session";
-import { LoginRequired, NotAllowed } from "@/components/login-required";
+import { currentUser, hasPermission } from "@/server/session";
 
 export const metadata = { title: "Beheer" };
+export const dynamic = "force-dynamic";
 
-const MODULES: [string, string, string][] = [
-  ["Catalogus", "Competities, teams, spelers en mappings", "fase 2"],
-  ["Importstatus", "Importruns, dekking en quarantaine", "fase 2"],
-  ["Spelertoelating", "Primaire toelating en marktstatus", "fase 3"],
-  ["Editie- en voorraadbeheer", "Edities, programma's en kaartnummers", "fase 3"],
-  ["Uitgifteplanning", "Drops voorbereiden, publiceren en uitstellen", "fase 6"],
-  ["Toewijzingen", "Snapshots, trekkingen en wachtlijsten", "fase 6"],
-  ["Waarderingsruns", "Concept, review en publicatie", "fase 7"],
-  ["Gebruikers en beperkingen", "Beperkingen per bevoegdheid", "fase 2"],
-  ["Orders en uitvoeringen", "Orderboeken en afwikkeling", "fase 5"],
-  ["Betalingsafwijkingen", "Pending en mislukte provideroperaties", "fase 4"],
-  ["Reconciliatie", "Dagelijkse aansluiting en verschillen", "fase 4"],
-  ["Auditlog", "Alle beheeracties met actor en reden", "fase 2"],
+const MODULES: [string, string, string, string | null][] = [
+  ["Catalogus en importstatus", "Competities, teams, spelers, imports en quarantaine", "catalog.view", "/beheer/catalogus"],
+  ["Gebruikers en beperkingen", "Status, verificatie en beperkingen per bevoegdheid", "users.view", "/beheer/gebruikers"],
+  ["Auditlog", "Alle beheeracties met actor en reden", "audit.view", "/beheer/audit"],
+  ["Spelertoelating", "Primaire toelating en marktstatus", "fase 3", null],
+  ["Editie- en voorraadbeheer", "Edities, programma's en kaartnummers", "fase 3", null],
+  ["Betalingsafwijkingen en reconciliatie", "Pending operaties en dagelijkse aansluiting", "fase 4", null],
+  ["Orders en uitvoeringen", "Orderboeken en afwikkeling", "fase 5", null],
+  ["Uitgifteplanning en toewijzingen", "Drops, trekkingen en wachtlijsten", "fase 6", null],
+  ["Waarderingsruns", "Concept, review en publicatie", "fase 7", null],
 ];
 
 const GATES = ["Juridisch", "Contracten", "Betalen", "Data", "Beeld", "Spelersidentiteit", "Waardering", "Techniek", "Security", "Operations"];
 
 export default async function AdminPage() {
-  const user = await currentUser();
-  if (!user) return <LoginRequired what="beheer" />;
-  // Server-side authorisation on every request (docs/02 UX-11).
-  if (!hasAdminRole(user)) return <NotAllowed />;
-  const w = demoWorld();
-  const open = w.players.filter((p) => p.marketStatus === "OPEN").length;
-  const missing = w.players.filter((p) => p.dataQuality === "MISSING").length;
+  const user = (await currentUser())!;
+  const cov = await catalogCoverage(getDb().db);
+  const open = cov.perCompetition.reduce((n, c) => n + c.openMarkets, 0);
+  const missing = cov.perCompetition.reduce((n, c) => n + c.missingData, 0);
   return (
     <div className="space-y-5">
-      <PageTitle title="Beheer" subtitle={`Ingelogd als ${user.displayName} · rollen: ${user.adminRoles.join(", ")}`} />
+      <PageTitle title="Beheer" subtitle={`Ingelogd als ${user.displayName} · rollen: ${user.roles.join(", ")}`} />
       <div className="grid gap-3 sm:grid-cols-4">
-        <Card><p className="text-sm text-muted">Catalogusspelers</p><p className="text-2xl font-semibold">{w.players.length}</p></Card>
+        <Card><p className="text-sm text-muted">Catalogusspelers</p><p className="text-2xl font-semibold">{cov.players}</p></Card>
         <Card><p className="text-sm text-muted">Open markten</p><p className="text-2xl font-semibold">{open}</p></Card>
         <Card><p className="text-sm text-muted">Profielen zonder data</p><p className="text-2xl font-semibold">{missing}</p></Card>
         <Card><p className="text-sm text-muted">Modus</p><p className="text-2xl font-semibold">Demo</p></Card>
       </div>
       <Card title="Modules">
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {MODULES.map(([name, desc, fase]) => (
-            <li key={name} className="rounded-lg border border-line p-3">
-              <p className="font-semibold">{name}</p>
-              <p className="text-sm text-muted">{desc}</p>
-              <p className="mt-2"><Pill tone="grey">Volgt in {fase}</Pill></p>
-            </li>
-          ))}
+          {MODULES.map(([name, desc, perm, href]) => {
+            const available = href !== null && hasPermission(user, perm);
+            const body = (
+              <>
+                <p className="font-semibold">{name}</p>
+                <p className="text-sm text-muted">{desc}</p>
+                <p className="mt-2">{href === null ? <Pill tone="grey">Volgt in {perm}</Pill> : available ? <Pill tone="green">Beschikbaar</Pill> : <Pill tone="amber">Geen rechten</Pill>}</p>
+              </>
+            );
+            return (
+              <li key={name}>
+                {available ? <Link href={href!} className="block h-full rounded-lg border border-line p-3 hover:border-primary">{body}</Link> : <div className="h-full rounded-lg border border-line p-3">{body}</div>}
+              </li>
+            );
+          })}
         </ul>
       </Card>
       <Card title="Livevoorwaarden (productiegates)">

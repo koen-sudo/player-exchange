@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@px/db": "workspace:*",
+    "@px/demo": "workspace:*",
     "@px/domain": "workspace:*",
     "@px/integrations": "workspace:*"
   },

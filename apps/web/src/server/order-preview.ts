@@ -16,6 +16,7 @@ import {
   isTimeInForce,
   mul,
   sellPreview,
+  type ActionDecision,
   type Cents,
   type TimeInForce,
 } from "@px/domain";
@@ -81,19 +82,20 @@ function parseQuantity(raw: unknown): number {
   return n;
 }
 
+/** The signed-in user as resolved on the server, with the BR-07 decision for trading. */
+export type PreviewActor = { id: string; trade: ActionDecision };
+
 export function buildOrderPreview(
   w: DemoWorld,
-  userId: string | null,
+  actor: PreviewActor | null,
   req: PreviewRequest,
   now: Date,
   newId: () => string,
 ): PreviewResult {
   try {
-    if (!userId) throw new DomainError("AUTH_REQUIRED");
-    const user = w.users.find((u) => u.id === userId);
-    if (!user) throw new DomainError("AUTH_REQUIRED");
-    if (!user.verified) throw new DomainError("VERIFICATION_REQUIRED");
-    if (user.residenceCountry !== "NL") throw new DomainError("COUNTRY_NOT_SUPPORTED");
+    if (!actor) throw new DomainError("AUTH_REQUIRED");
+    if (!actor.trade.allowed) throw new DomainError(actor.trade.code);
+    const userId = actor.id;
 
     const side = req.side;
     if (side !== "BUY" && side !== "SELL") throw new DomainError("ACTION_NOT_ALLOWED", { side });

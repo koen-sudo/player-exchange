@@ -4,7 +4,8 @@ import type { NextConfig } from "next";
 // server startup, where workspace TypeScript packages are compiled by Next.
 
 const config: NextConfig = {
-  transpilePackages: ["@px/domain", "@px/demo", "@px/integrations"],
+  transpilePackages: ["@px/domain", "@px/demo", "@px/integrations", "@px/db"],
+  serverExternalPackages: ["pg"],
   poweredByHeader: false,
   async headers() {
     return [

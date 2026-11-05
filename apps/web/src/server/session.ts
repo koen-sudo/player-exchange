@@ -1,32 +1,58 @@
 /**
  * The single place where pages and API routes learn who the user is.
- * Roles, verification and permissions always come from server-side state,
- * never from the session token or the request.
+ * The session token carries only the user id; status, verification, roles,
+ * permissions and restrictions are read from the database on every request.
  */
 import "server-only";
+import { cache } from "react";
 import { auth } from "@/auth";
-import { demoWorld, type DemoUser } from "@px/demo";
+import { getDb, loadIdentity, type Identity } from "@px/db";
+import { loadConfig } from "@px/integrations/env";
 
-export type SessionUser = DemoUser & {
+export type SessionUser = {
+  id: string;
+  displayName: string;
+  verified: boolean;
+  residenceCountry: string | null;
+  roles: string[];
+  permissions: Set<string>;
+  actions: Identity["actions"];
   canTrade: boolean;
   tradeBlockReason: string | null;
+  canSubscribe: boolean;
+  subscribeBlockReason: string | null;
 };
 
-export async function currentUser(): Promise<SessionUser | null> {
+const reasonOf = (d: Identity["actions"][keyof Identity["actions"]]) => (d.allowed ? null : d.reason);
+
+/** Cached per request so a page and its components share one lookup. */
+export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   const id = (session?.user as { id?: string } | undefined)?.id;
   if (!id) return null;
-  const user = demoWorld().users.find((u) => u.id === id);
-  if (!user) return null;
-  const tradeBlockReason = !user.verified
-    ? "Rond eerst je verificatie af om te handelen."
-    : user.residenceCountry !== "NL"
-      ? "Handelen is in je woonland nog niet beschikbaar."
-      : null;
-  return { ...user, canTrade: tradeBlockReason === null, tradeBlockReason };
+  const { mode } = loadConfig(process.env);
+  const identity = await loadIdentity(getDb().db, id, mode);
+  if (!identity || identity.status === "CLOSED") return null;
+  return {
+    id: identity.id,
+    displayName: identity.displayName,
+    verified: identity.verified,
+    residenceCountry: identity.residenceCountry,
+    roles: identity.roles,
+    permissions: identity.permissions,
+    actions: identity.actions,
+    canTrade: identity.actions.TRADE.allowed,
+    tradeBlockReason: reasonOf(identity.actions.TRADE),
+    canSubscribe: identity.actions.SUBSCRIBE.allowed,
+    subscribeBlockReason: reasonOf(identity.actions.SUBSCRIBE),
+  };
+});
+
+export function hasPermission(user: SessionUser | null, permission: string): boolean {
+  return !!user && user.permissions.has(permission);
 }
 
-export function hasAdminRole(user: SessionUser | null, role?: string): boolean {
-  if (!user || user.role !== "ADMIN") return false;
-  return role ? user.adminRoles.includes(role) || user.adminRoles.includes("SUPERADMIN") : true;
+/** Admin area access is itself a permission (docs/02 UX-11). */
+export function hasAdminRole(user: SessionUser | null): boolean {
+  return hasPermission(user, "admin.access");
 }

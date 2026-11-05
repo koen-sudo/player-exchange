@@ -5,8 +5,9 @@ import { buildOrderPreview } from "../src/server/order-preview.ts";
 import { marketHref, parseMarketParams } from "../src/lib/market-params.ts";
 
 const w = buildDemoWorld();
-const anna = w.users.find((u) => u.login === "anna")!;
-const bram = w.users.find((u) => u.login === "bram")!;
+const annaUser = w.users.find((u) => u.login === "anna")!;
+const anna = { id: annaUser.id, trade: { allowed: true } as const };
+const bram = { id: w.users.find((u) => u.login === "bram")!.id, trade: { allowed: false, code: "VERIFICATION_REQUIRED", reason: "x" } as const };
 const noah = w.players.find((p) => p.displayName === "Noah Vermeer")!;
 const lucas = w.players.find((p) => p.displayName === "Lucas Moreau")!;
 const profileOnly = w.players.find((p) => p.marketStatus === "PROFILE_ONLY")!;
@@ -15,7 +16,7 @@ let n = 0;
 const id = () => `preview-${++n}`;
 
 const buy = (over: Record<string, unknown> = {}) =>
-  buildOrderPreview(w, anna.id, { side: "BUY", playerId: noah.id, quantity: 1, limitPriceMinor: "620", timeInForce: "ONE_DAY", ...over }, now, id);
+  buildOrderPreview(w, anna, { side: "BUY", playerId: noah.id, quantity: 1, limitPriceMinor: "620", timeInForce: "ONE_DAY", ...over }, now, id);
 
 describe("order preview (UX-06/07, docs/06)", () => {
   it("buy 1 × €6,20: server computes €6,20 maximum reserve, 60 s validity, 24 h expiry", () => {
@@ -38,7 +39,7 @@ describe("order preview (UX-06/07, docs/06)", () => {
 
   it("needs a session, verification and an open market", () => {
     assert.equal((buildOrderPreview(w, null, { side: "BUY", playerId: noah.id, quantity: 1, limitPriceMinor: "620", timeInForce: "ONE_DAY" }, now, id) as { code: string }).code, "AUTH_REQUIRED");
-    assert.equal((buildOrderPreview(w, bram.id, { side: "BUY", playerId: noah.id, quantity: 1, limitPriceMinor: "620", timeInForce: "ONE_DAY" }, now, id) as { code: string }).code, "VERIFICATION_REQUIRED");
+    assert.equal((buildOrderPreview(w, bram, { side: "BUY", playerId: noah.id, quantity: 1, limitPriceMinor: "620", timeInForce: "ONE_DAY" }, now, id) as { code: string }).code, "VERIFICATION_REQUIRED");
     assert.equal((buy({ playerId: profileOnly.id }) as { code: string }).code, "MARKET_NOT_OPEN");
   });
 
@@ -53,10 +54,10 @@ describe("order preview (UX-06/07, docs/06)", () => {
   });
 
   it("sell 1 × €6,00: gross €6,00, commission €0,30, net €5,70 with oldest card", () => {
-    const r = buildOrderPreview(w, anna.id, { side: "SELL", playerId: noah.id, quantity: 1, limitPriceMinor: "630", timeInForce: "SEVEN_DAYS" }, now, id);
+    const r = buildOrderPreview(w, anna, { side: "SELL", playerId: noah.id, quantity: 1, limitPriceMinor: "630", timeInForce: "SEVEN_DAYS" }, now, id);
     // €6,30 sell is above Anna's own €6,20 bid, so no self-cross.
     assert.ok(r.ok);
-    const s = buildOrderPreview(w, anna.id, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "SEVEN_DAYS" }, now, id);
+    const s = buildOrderPreview(w, anna, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "SEVEN_DAYS" }, now, id);
     assert.ok(s.ok);
     if (!s.ok || s.preview.side !== "SELL") return;
     assert.deepEqual([s.preview.grossAtLimitMinor, s.preview.commissionMinor, s.preview.netAtLimitMinor], ["600", "30", "570"]);
@@ -65,20 +66,20 @@ describe("order preview (UX-06/07, docs/06)", () => {
   });
 
   it("a sell that would cross the user's own bid is rejected (BR-17)", () => {
-    const r = buildOrderPreview(w, anna.id, { side: "SELL", playerId: noah.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY" }, now, id);
+    const r = buildOrderPreview(w, anna, { side: "SELL", playerId: noah.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY" }, now, id);
     assert.deepEqual(r.ok ? null : r.code, "SELF_TRADE_REJECTED");
   });
 
   it("cannot sell more free cards than held, nor a reserved card (AT-13)", () => {
-    const tooMany = buildOrderPreview(w, anna.id, { side: "SELL", playerId: lucas.id, quantity: 2, limitPriceMinor: "600", timeInForce: "ONE_DAY" }, now, id);
+    const tooMany = buildOrderPreview(w, anna, { side: "SELL", playerId: lucas.id, quantity: 2, limitPriceMinor: "600", timeInForce: "ONE_DAY" }, now, id);
     assert.equal(tooMany.ok ? null : tooMany.code, "CARD_UNAVAILABLE");
-    const reservedCard = w.holdings[anna.id]!.find((c) => c.reservedForSale)!;
-    const r = buildOrderPreview(w, anna.id, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY", cardIds: [reservedCard.cardId] }, now, id);
+    const reservedCard = w.holdings[annaUser.id]!.find((c) => c.reservedForSale)!;
+    const r = buildOrderPreview(w, anna, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY", cardIds: [reservedCard.cardId] }, now, id);
     assert.equal(r.ok ? null : r.code, "CARD_UNAVAILABLE");
   });
 
   it("cannot sell someone else's card (AT-09)", () => {
-    const r = buildOrderPreview(w, anna.id, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY", cardIds: ["not-mine"] }, now, id);
+    const r = buildOrderPreview(w, anna, { side: "SELL", playerId: lucas.id, quantity: 1, limitPriceMinor: "600", timeInForce: "ONE_DAY", cardIds: ["not-mine"] }, now, id);
     assert.equal(r.ok ? null : r.code, "CARD_UNAVAILABLE");
   });
 });

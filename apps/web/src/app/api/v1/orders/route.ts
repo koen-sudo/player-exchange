@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if (!sameOrigin(req)) return apiError("ACTION_NOT_ALLOWED", requestId);
   const user = await currentUser();
   if (!user) return apiError("AUTH_REQUIRED", requestId);
-  if (!user.canTrade) return apiError("VERIFICATION_REQUIRED", requestId);
+  if (!user.actions.TRADE.allowed) return apiError(user.actions.TRADE.code, requestId);
   if (!idempotencyKey(req)) return apiError("ACTION_NOT_ALLOWED", requestId, "missing Idempotency-Key");
   return NextResponse.json(
     {

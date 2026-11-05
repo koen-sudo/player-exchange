@@ -46,7 +46,23 @@ jobs:
         run: pnpm typecheck
       - name: Build
         run: pnpm build
-      - name: End-to-end
+      - name: Demo-database klaarzetten
+        env:
+          DATABASE_URL: postgres://px:px@localhost:5432/px_demo
+        run: |
+          psql -d postgres -c "CREATE DATABASE px_demo"
+          pnpm db:migrate
+          pnpm db:seed
+      - name: End-to-end (web + worker tegen demo-database)
+        env:
+          DATABASE_URL: postgres://px:px@localhost:5432/px_demo
+          E2E_BASE_URL: http://localhost:3000
         run: |
           pnpm --filter @px/web exec playwright install --with-deps chromium
-          pnpm --filter @px/web test:e2e
+          (cd apps/web && pnpm start > ../../web.log 2>&1 &)
+          (node apps/worker/src/main.ts > worker.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf localhost:3000/api/v1/health && break; sleep 1; done
+          pnpm test:e2e
+      - name: Logs bij falen
+        if: failure()
+        run: tail -n 100 web.log worker.log || true

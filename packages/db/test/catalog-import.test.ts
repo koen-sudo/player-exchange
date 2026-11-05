@@ -224,3 +224,16 @@ describe("import on the demo-seeded database", () => {
     assert.equal(market!.status, "OPEN");
   });
 });
+
+describe("fresh demo database", () => {
+  it("the first import on a freshly seeded database changes nothing", async () => {
+    const t = await createTestDb({ seeded: true });
+    try {
+      const { stats } = await importOnce(t);
+      assert.deepEqual([stats.playersCreated, stats.playersUpdated, stats.membershipsOpened, stats.membershipsClosed], [0, 0, 0, 0]);
+      assert.equal(stats.playersUnchanged, 240);
+    } finally {
+      await t.drop();
+    }
+  });
+});

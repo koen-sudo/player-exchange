@@ -10,7 +10,10 @@
  */
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "@px/integrations/env";
+import { loadConfig, type AppConfig } from "@px/integrations/env";
+import type { FootballDataProvider } from "@px/integrations";
+import { claimNextRun, getDb, runCatalogImport, type Db } from "@px/db";
+import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
   name: string;
@@ -24,7 +27,7 @@ const notYet = (fase: number) => async () => {
 };
 
 export const JOBS: JobDefinition[] = [
-  { name: "catalog.sync", schedule: "nachtelijks en handmatig", fase: 2, run: notYet(2) },
+  { name: "catalog.sync", schedule: "continu: ingeplande en onderbroken imports (database als wachtrij)", fase: 2, run: async () => undefined },
   { name: "fixtures.sync", schedule: "periodiek en na wedstrijdupdates", fase: 2, run: notYet(2) },
   { name: "external-valuations.check", schedule: "dagelijks", fase: 7, run: notYet(7) },
   { name: "valuation.weekly-run", schedule: "maandag 18.00 Europe/Amsterdam, na controle", fase: 7, run: notYet(7) },
@@ -35,15 +38,53 @@ export const JOBS: JobDefinition[] = [
   { name: "notifications.outbox", schedule: "continu via outbox", fase: 6, run: notYet(6) },
 ];
 
-export function startWorker(env: Readonly<Record<string, string | undefined>> = process.env) {
+/** Supplier adapter for the configured football data provider. */
+export function footballProvider(cfg: AppConfig): FootballDataProvider {
+  if (cfg.adapters.footballData === "fixture") return createFixtureProvider();
+  throw new Error(`football data provider "${cfg.adapters.footballData}" is not implemented yet (O-03)`);
+}
+
+/**
+ * One polling cycle: claim a queued run (or one whose worker died) and run it.
+ * Returns the run id it worked on, or null when there was nothing to do.
+ */
+export async function catalogSyncOnce(db: Db, provider: FootballDataProvider): Promise<string | null> {
+  const runId = await claimNextRun(db);
+  if (!runId) return null;
+  try {
+    const stats = await runCatalogImport(db, runId, provider);
+    console.log(JSON.stringify({ level: "info", msg: "catalog import completed", runId, stats }));
+  } catch (e) {
+    // The run is marked FAILED with the error; completed steps are kept for a retry.
+    console.error(JSON.stringify({ level: "error", msg: "catalog import failed", runId, error: (e as Error).message }));
+  }
+  return runId;
+}
+
+export function startWorker(env: Readonly<Record<string, string | undefined>> = process.env, opts: { pollMs?: number; db?: Db } = {}) {
   const cfg = loadConfig(env); // throws on invalid/unsafe configuration (AT-35)
   let stopping = false;
+  let busy = false;
+  const pollMs = opts.pollMs ?? 5_000;
+  const poll = opts.pollMs === 0 ? null : setInterval(async () => {
+    if (stopping || busy) return;
+    busy = true;
+    try {
+      const db = opts.db ?? getDb(cfg.databaseUrl).db;
+      await catalogSyncOnce(db, footballProvider(cfg));
+    } catch (e) {
+      console.error(JSON.stringify({ level: "error", msg: "catalog poll failed", error: (e as Error).message }));
+    } finally {
+      busy = false;
+    }
+  }, pollMs);
   const heartbeat = setInterval(() => {
     if (!stopping) console.log(JSON.stringify({ level: "info", msg: "worker heartbeat", mode: cfg.mode, jobs: JOBS.length, at: new Date().toISOString() }));
   }, 30_000);
   const stop = (signal: string) => {
     stopping = true;
     clearInterval(heartbeat);
+    if (poll) clearInterval(poll);
     console.log(JSON.stringify({ level: "info", msg: "worker stopping", signal }));
   };
   process.once("SIGTERM", () => stop("SIGTERM"));

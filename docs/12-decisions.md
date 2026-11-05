@@ -78,6 +78,17 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-16 | Spelersdetail op mobiel toont snelknoppen "Kopen" en "Verkopen" onder de prijzen die naar het handelspaneel springen; het paneel zelf blijft onderaan. | Volgt de mobiele wireframe; de controle-eerst-volgorde (WF-02) blijft gelijk. |
 | R-17 | In de markttabel wordt een onbekende wijziging getoond als "—" met schermlezertekst "Niet beschikbaar"; onbekende prijzen blijven voluit "Niet beschikbaar". | Ruimte in de tabel bij open handelspaneel; de wijziging is geen prijs. |
 | R-18 | TypeScript 5.9.3 in plaats van 7.0.2, Auth.js 5.0.0-beta.32 exact vastgepind, Playwright 1.64.1. | `docs/adr/0001-stack.md`. |
+| R-19 | Catalogusimports gebruiken de database als wachtrij (`import_runs` met `SKIP LOCKED` en heartbeat) in plaats van BullMQ. | `docs/adr/0004-database-queue-for-imports.md`. |
+| R-20 | Hervatten gebeurt per stap (competitielijst, teams per competitie, selectie per team). Een onderbroken stap begint opnieuw bij pagina 1. | Alleen een volledige selectie mag vertrokken spelers afsluiten; daarvoor moet de hele stap gezien zijn. |
+| R-21 | Een speler in de volledige of gedeeltelijke selectie van een andere club telt als transfer: zelfde speler-ID en markt, oud eerste-elftallidmaatschap afgesloten. Een speler die ontbreekt in een *volledige* selectie verliest alleen zijn lidmaatschap. Profielen worden nooit verwijderd. | BR-01, docs/07 importproces, AT-03/AT-04. |
+| R-22 | Een nieuw extern ID met dezelfde naam en geboortedatum als een bestaand profiel gaat in quarantaine (`CONFLICTING_MATCH`). Er wordt nooit automatisch samengevoegd of dubbel aangemaakt. | BR-01 "dubbele of conflicterende matches in quarantaine". |
+| R-23 | Een geïmporteerd profiel krijgt altijd een markt met status `PROFILE_ONLY` en primaire toelating `INELIGIBLE`. | docs/01: importeren geeft geen toestemming voor uitgifte. |
+| R-24 | Ruwe importpagina's worden 90 dagen bewaard (`import_snapshots.retain_until`). | Werkaanname tot de datalicentie de bewaartermijn bepaalt (O-03). |
+| R-25 | Toelating per handeling (BR-07): verificatie en leeftijd voor alle geldhandelingen; land en voorwaarden alleen voor handelingen die geld of positie toevoegen (handelen, inschrijven, storten); opnemen en annuleren blijven mogelijk. Handelsstop blokkeert alleen handelen; volledige stop alles behalve annuleren; een opgeschort account kan alleen opnemen en annuleren. In productie zijn geldhandelingen geblokkeerd zolang een productiegate open staat. | BR-07 voorbeeld en PRD-15. |
+| R-26 | Toegelaten woonlanden staan in `admitted_countries` (start: NL, A-01). Voorwaarden staan in `terms_documents`; de huidige versies zijn placeholders (`demo-0`) tot O-07. | Configureerbaar zonder codewijziging. |
+| R-27 | De publieke catalogus-API toont leeftijd, nooit geboortedatum, en niets over gebruikers. | Privacy; acceptatiecriterium fase 2. |
+| R-28 | De markt-, speler-, portefeuille- en uitgiftepagina's lezen in fase 2 nog uit de demowereld (met dezelfde ID's als de database). Ze schakelen over naar PostgreSQL zodra voorraad (fase 3) en orderboek (fase 5) in de database staan. De catalogus-API en het beheer lezen al uit PostgreSQL. | Eén bron per scherm; geen half gevulde schermen. |
+| R-29 | Een eerste OIDC-login maakt de gebruiker aan (onderwerp `issuer|sub`); nieuwe gebruikers starten ongeverifieerd. | docs/04, BR-07. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 
@@ -109,7 +120,7 @@ Geen tegenstrijdigheden gevonden in de geld-, eigendoms- of afwikkelregels.
 
 | ID | Vraag | Tijdelijke werkwijze |
 |---|---|---|
-| V-01 | Mag de dropprijs tussen publicatie (donderdag 18.00) en vastlegging (dinsdag 09.00) nog wijzigen, bijvoorbeeld door de maandagrun? Zo ja: alleen omlaag, of in beide richtingen? | Demo toont de prijs als vast vanaf publicatie (strengste lezing van PRD-06). |
+| V-01 | Mag de dropprijs tussen publicatie (donderdag 18.00) en vastlegging (dinsdag 09.00) nog wijzigen? | **Beantwoord 5 november 2026: ja.** Open deelvraag V-01a: alleen omlaag, of in beide richtingen? Nodig in fase 6. |
 | V-02 | Is er een wireframe van het marktoverzicht (UX-01)? | Gebouwd volgens UX-01. |
 
 ## Visuele referenties

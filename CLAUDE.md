@@ -49,11 +49,11 @@ Lees vóór iedere fase: dit bestand, de betreffende specificaties in `docs/`, `
 
 | Doel | Commando |
 |---|---|
-| Unit- en integratietests (Vitest) | `pnpm test` |
+| Unit- en integratietests (Vitest; integratietests vereisen PostgreSQL via PGHOST/PGUSER/PGPASSWORD) | `pnpm test` |
 | Databasetests | `pnpm test:db` (vereist PostgreSQL) |
 | Typecheck | `pnpm typecheck` |
 | Build | `pnpm build` |
-| End-to-end (Playwright) | `pnpm test:e2e` |
+| End-to-end (Playwright; web én worker draaien tegen een gemigreerde, geseede database) | `pnpm test:e2e` |
 | Lokale diensten | `docker compose up -d db redis` |
 
 Bekijk na een wijziging aan schermen de demo op 390, 768 en 1440 px.

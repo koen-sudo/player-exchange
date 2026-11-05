@@ -11,6 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@px/db": "workspace:*",
     "@px/demo": "workspace:*",
     "@px/domain": "workspace:*",
     "@px/integrations": "workspace:*",

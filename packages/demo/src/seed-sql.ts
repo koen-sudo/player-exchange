@@ -29,6 +29,9 @@ export function seedSql(): string {
     out.push(`INSERT INTO users(id, auth_subject, is_test_account, is_staff) VALUES (${q(u.id)}, ${q(`demo:${u.login}`)}, true, ${u.role === "ADMIN"});`);
     out.push(`INSERT INTO user_profiles(user_id, display_name, residence_country, verification_status, age_confirmed) VALUES (${q(u.id)}, ${q(u.displayName)}, ${q(u.residenceCountry)}, ${q(u.verified ? "VERIFIED" : "NOT_STARTED")}, ${u.verified});`);
     for (const r of u.adminRoles) out.push(`INSERT INTO user_roles(user_id, role_key) VALUES (${q(u.id)}, ${q(r)});`);
+    if (u.verified) {
+      out.push(`INSERT INTO terms_acceptances(user_id, document_key, document_version) SELECT ${q(u.id)}, document_key, document_version FROM terms_documents WHERE is_current;`);
+    }
   }
 
   out.push(`INSERT INTO valuation_model_versions(id, version_key, is_demo, parameters, code_version, status) VALUES (${q(demoModel)}, 'demo-v0', true, '{"note":"demomodel, geen productieformule"}', 'demo', 'APPROVED');`);
@@ -65,9 +68,11 @@ export function seedSql(): string {
 }
 
 function playerSql(p: Player): string {
+  // Same name split as the fixture provider, so a first import changes nothing.
+  const [first = "", ...rest] = p.displayName.split(" ");
   return (
-    `INSERT INTO players(id, display_name, birth_date, nationality, career_status, data_quality, primary_admission, is_fictional) VALUES ` +
-    `(${q(p.id)}, ${q(p.displayName)}, ${q(p.birthDate)}, ${q(p.nationality)}, ${q(p.careerStatus)}, ${q(p.dataQuality)}, ${q(p.primaryAdmission)}, true);\n` +
+    `INSERT INTO players(id, display_name, first_name, last_name, birth_date, nationality, career_status, data_quality, primary_admission, is_fictional) VALUES ` +
+    `(${q(p.id)}, ${q(p.displayName)}, ${q(first)}, ${q(rest.join(" "))}, ${q(p.birthDate)}, ${q(p.nationality)}, ${q(p.careerStatus)}, ${q(p.dataQuality)}, ${q(p.primaryAdmission)}, true);\n` +
     `INSERT INTO provider_player_mappings VALUES ('fixture', ${q(p.id)}, ${q(p.id)});\n` +
     `INSERT INTO player_team_memberships(player_id, team_id, membership_type, valid_from) VALUES (${q(p.id)}, ${q(p.teamId)}, 'FIRST_TEAM', ${q(p.previousTeamId ? "2026-09-01" : "2026-07-01")});` +
     (p.previousTeamId

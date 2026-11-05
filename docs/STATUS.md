@@ -1,71 +1,76 @@
 # Projectstatus
 
-Laatst bijgewerkt: 5 november 2026, 20:30. **Fase 0 en 1 zijn opgeleverd.** Volgende fase: 2 (catalogus en authenticatie). Niets in deze repository is productiegeschikt.
+Laatst bijgewerkt: 5 november 2026, 21:30. **Fase 0, 1 en 2 zijn opgeleverd.** Volgende fase: 3 (voorraad en portefeuille). Niets in deze repository is productiegeschikt.
 
 ## Wat de producteigenaar nog moet doen
 
 | # | Actie | Blokkeert |
 |---|---|---|
-| 1 | GitHub koppelen: claude.ai → Settings → **Connectors** → GitHub, en de Claude GitHub App toegang geven tot `koen-sudo/player-exchange` (github.com → Settings → Applications) | Pushen naar de repo en CI |
-| 2 | Vraag V-01 beantwoorden: mag de dropprijs tussen donderdag 18.00 en dinsdag 09.00 nog wijzigen? Zo ja, alleen omlaag of beide kanten op? | Fase 6 (uitgiftes) |
-| 3 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets; de markt is gebouwd volgens UX-01 |
+| 1 | Vraag V-01a: mag de dropprijs tussen donderdag en dinsdag alleen **omlaag**, of **beide kanten op**? | Fase 6 |
+| 2 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets |
+| 3 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter in fase 2; tot die tijd draait de import op de fictieve fixtureprovider |
+| 4 | Een identiteitsprovider kiezen (O-06) | Echte verificatie; in demo is de verificatiestatus vast |
 
-npm-toegang is in orde.
-
-## Fase 0 — Dossier en projectfundament: opgeleverd
-
-| Oplevering | Status |
-|---|---|
-| Documentstructuur, `CLAUDE.md`, beslisregister, consistentiecontrole | Klaar (`docs/12-decisions.md`: C-01 t/m C-09, R-01 t/m R-18, V-01 en V-02) |
-| ADR en dependencyversies | ADR 0001 met vastgelegde versies, ADR 0002 (SQL-migraties), ADR 0003 (afgesloten) |
-| Monorepo (pnpm workspaces + Turborepo, één lockfile) | Klaar |
-| Database, migraties, constraints | Klaar en getest |
-| Worker | Skelet met configuratiebewaking, jobregister en nette shutdown; jobinhoud volgt per fase |
-| Omgevingsvalidatie en healthcheck | Klaar en getest (`/api/v1/health`) |
-| CI | `.github/workflows/ci.yml`; draait zodra de repo gekoppeld is |
-| **Acceptatie:** nieuwe checkout start met de README zonder verborgen stappen | **Aangetoond.** Verse kloon → `pnpm install --frozen-lockfile` → migratie → seed → tests → typecheck → build: alles geslaagd. Daarbij gevonden en opgelost: Turborepo gaf de omgevingsvariabelen niet door aan de build, en de worker startte niet vanaf een pad met een symlink. |
-
-## Fase 1 — Huisstijl en demo-interface: opgeleverd
+## Fase 2 — Catalogus en authenticatie: opgeleverd (met één blokkade)
 
 | Oplevering | Status |
 |---|---|
-| Schermen: Overzicht, Markt (met handelspaneel), Spelersdetail, Portefeuille, Uitgiftes + inschrijfflow, Orders en transacties, Betalingen, Account, Beheer, Inloggen | Gebouwd en bekeken |
-| Schermtoestanden: laden, leeg, fout, onvoldoende rechten, inloggen vereist, verouderde/ontbrekende data | Gebouwd |
-| WF-01 "3 spelers · 6 kaarten" | Werkt op 390, 768 en 1440 px (AT-36, Playwright) |
-| WF-02 "Controleer kooporder" → controlevenster → "Kooporder plaatsen" | Werkt (Playwright) |
-| Wireframe-afwijkingen C-01 t/m C-07 | Verwerkt |
-| Demo-acties | Elke knop heeft een demoactie of een zichtbare reden. Plaatsen, annuleren, storten, opnemen en inschrijven zeggen expliciet dat er niets is uitgevoerd. |
-| Responsiveness | Bekeken op 390, 768 en 1440 px. Na bekijken verbeterd: zijbalk over volle hoogte, markttabel past naast het handelspaneel, mobiele spelerspagina met Kopen/Verkopen bovenaan, controlevenster zonder overloop op mobiel. |
+| Databasetoegang (Drizzle 0.45.4 + node-postgres 8.23.1) | Klaar |
+| Migratie 0002: importvoortgang, snapshots, quarantaine, unieke lidmaatschappen, rechten, voorwaarden, toegelaten landen, zoekindex | Klaar |
+| Fixtureprovider met scenario's: transfer tussen competities, vertrek, naamcorrectie, nieuwe jeugdspeler, gedeeltelijke feed, storing, dubbele aanlevering, conflicterende identiteit | Klaar |
+| Catalogusimport: mapping naar vaste speler-ID, transfers zonder duplicaten, gedeeltelijke feeds verwijderen niets, conflicten in quarantaine, idempotent, hervatbaar | Klaar |
+| Worker verwerkt ingeplande en onderbroken imports (database als wachtrij, ADR 0004) | Klaar |
+| Identiteit: inloggen via de database, eerste OIDC-login maakt gebruiker aan, sessie bevat alleen het gebruikers-ID | Klaar |
+| Toelating per handeling (BR-07) en productieblokkade (PRD-15) | Klaar, gebruikt door orderpreview en orders-API |
+| Rollen en rechten uit de database; beheer per recht afgeschermd | Klaar |
+| Beheer: Catalogus en importstatus, Gebruikers en beperkingen, Auditlog | Klaar |
+| API: `/competitions`, `/teams`, `/players` (cursorpaginering), `/players/{id}`, `/me` uit PostgreSQL | Klaar |
+| **Gekozen provideradapter toevoegen** | **Geblokkeerd door O-03** (geen dataleverancier gekozen) |
+
+### Acceptatie fase 2
+
+| Criterium | Bewijs |
+|---|---|
+| Alle zes competities werken | Import, catalogus-API en beheer tonen 6 competities met 4 teams en 40 spelers (integratie- en e2e-tests) |
+| Imports zijn hervatbaar | Storing halverwege → run `FAILED` met voltooide stappen → hervat met minder providercalls → zelfde eindresultaat; een run met verlopen heartbeat wordt opnieuw opgepakt |
+| Transfers veroorzaken geen duplicaten | Transfer van Eredivisie naar Premier League: zelfde speler-ID, zelfde markt, kaarten en eigenaren ongewijzigd, oud lidmaatschap afgesloten (AT-03) |
+| Privégegevens blijven privé | Publieke API zonder geboortedata en zonder gebruikersgegevens; `/me` alleen over de ingelogde gebruiker; beheer alleen met het juiste recht |
 
 ## Werkelijk uitgevoerde controles
 
-Uitgevoerd op 5 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
+5 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
 
 | Controle | Uitkomst |
 |---|---|
-| `pnpm test` (Vitest) | **76 tests geslaagd** |
-| `pnpm test:db` op verse database | **45 constraintcontroles geslaagd**, elk met gecontroleerde weigeringsreden |
-| `pnpm typecheck` | **5 van 5 workspaces geslaagd** |
-| `pnpm build` (Next.js 16.4.5) | **Geslaagd**, 16 routes |
-| `pnpm test:e2e` (Playwright, Chrome) | **8 tests geslaagd**: competitiefilter (AT-01), filters behouden na terugnavigeren, geen verzonnen prijs bij profielen (AT-05), WF-02, WF-01 op drie breedtes (AT-36), niet-toegelaten gebruiker via directe API geweigerd (AT-08) |
-| Verse checkout volgens README | Geslaagd (zie fase 0) |
-| Migratie tweemaal | Tweede keer overgeslagen |
-| Demo-seed | 240 spelers, 120 open markten, 5.960 kaarten, 228 gepubliceerde referenties |
-| Demo-seed met `APP_MODE=production` | Geweigerd |
-| Screenshots | 26 schermen op 390, 768 en 1440 px bekeken en vergeleken met de wireframes |
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **122 tests geslaagd** (fase 2: +46) |
+| `pnpm test:db` | **45 constraintcontroles geslaagd** |
+| `pnpm typecheck` | **6 van 6 workspaces geslaagd** |
+| `pnpm build` | **Geslaagd**, 24 routes |
+| `pnpm test:e2e` (web + worker tegen geseede database) | **15 tests geslaagd**: 8 uit fase 1, 7 nieuw (catalogus-API en privacy, `/me`, rechten in beheer, import via beheer die de worker afrondt, handelsstop met audit, geen zelfbeperking) |
+| Eerste import op verse demodatabase | 240 ongewijzigd, 0 nieuw, 0 bijgewerkt |
+| Schermen beheer | Bekeken op 1440 en 390 px |
+
+Belangrijke tests per acceptatiecriterium: AT-01 (zes competities), AT-02 (herimport zonder duplicaten), AT-03 (transfer behoudt ID, kaarten en markt), AT-04 (gedeeltelijke import verwijdert niets), AT-08 (niet-toegelaten gebruiker), AT-29 (concept-waardering niet publiek), AT-33 (beheeracties met actor en reden).
+
+## Eerdere fasen
+
+- **Fase 0** — Dossier, projectfundament, CI. Acceptatie aangetoond met een verse checkout.
+- **Fase 1** — Huisstijl en demo-interface; WF-01 en WF-02 werken op 390, 768 en 1440 px.
 
 ## Niet uitgevoerd
 
 | Controle | Reden / planning |
 |---|---|
-| CI op GitHub | Repo nog niet gekoppeld |
-| Gelijktijdigheidstest met parallelle databaseverbindingen (AT-07 onder echte concurrency) | Hoort bij fase 3/5; de databaseconstraints zelf zijn getest |
-| Performance-richtwaarden (hoofdstuk 09) | Fase 9 |
+| Echte provideradapter en contracttests | O-03; fase 8 voor sandbox |
+| Gelijktijdigheidstest met parallelle verbindingen op kaarten (AT-07) | Fase 3/5 |
+| Performance bij 10.000 catalogusspelers | Zoekindex staat er; meting in fase 9 |
 
-## Alleen demo
+## Bekende beperkingen van deze demo
 
-Alles is demo: fictieve spelers en clubs, demomodel `demo-v0` voor referentiewaardes, testgeld, lokale testlogin, geen betaalpartner, identiteitsprovider of datalicentie. Open afhankelijkheden O-01 t/m O-10 staan in `docs/12-decisions.md`.
+- Markt-, speler-, portefeuille- en uitgiftepagina's lezen nog uit de demowereld (R-28). Ze gaan over op PostgreSQL in fase 3 (voorraad) en fase 5 (orderboek).
+- Problemen in quarantaine zijn zichtbaar maar kunnen nog niet worden afgehandeld; de beoordelingsflow volgt met fase 3 (spelertoelating).
+- Alles is demo: fictieve spelers en clubs, demomodel `demo-v0`, testgeld, lokale testlogin, placeholder-voorwaarden.
 
-## Volgende fase: 2 — Catalogus en authenticatie
+## Volgende fase: 3 — Voorraad en portefeuille
 
-Identity en autorisatie op de database, catalogusimport met fixtureprovider, mappings, teams en selecties, hervatbare imports, transfers zonder duplicaten. De read models schakelen dan van de demowereld naar PostgreSQL; de schermen blijven gelijk.
+Edities, kaartserienummers, eigendomshistorie, voorraadprogramma's en kostenbasis in PostgreSQL. Spelertoelating en afhandeling van quarantaine in beheer. De voorraad- en portefeuilleschermen gaan dan over op de database.

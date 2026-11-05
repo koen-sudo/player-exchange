@@ -75,7 +75,7 @@ function searchKey(s: string): string {
 export const CATALOG_SCOPE = "catalog";
 
 /** Queue a run. At most one active run per provider/scope (unique index). */
-export async function queueCatalogImport(db: Db, provider: string, requestedBy: string | null): Promise<{ runId: string; alreadyActive: boolean }> {
+export async function queueCatalogImport(db: Executor, provider: string, requestedBy: string | null): Promise<{ runId: string; alreadyActive: boolean }> {
   const inserted = await db
     .insert(importRuns)
     .values({ provider, scope: CATALOG_SCOPE, status: "QUEUED", requestedBy })

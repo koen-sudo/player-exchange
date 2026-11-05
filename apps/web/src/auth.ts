@@ -9,7 +9,7 @@
  */
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { demoWorld } from "@px/demo";
+import { ensureUserForSubject, findUserIdByAuthSubject, getDb, recordLogin } from "@px/db";
 import { isDemoLoginAllowed, loadConfig } from "@px/integrations/env";
 
 const cfg = loadConfig(process.env);
@@ -24,8 +24,13 @@ const providers = isDemoLoginAllowed(cfg)
           // Re-check at request time: never rely on build-time configuration alone.
           if (!isDemoLoginAllowed(loadConfig(process.env))) return null;
           const login = typeof credentials?.login === "string" ? credentials.login : "";
-          const user = demoWorld().users.find((u) => u.login === login);
-          return user ? { id: user.id, name: user.displayName } : null;
+          if (!/^[a-z]{2,20}$/.test(login)) return null;
+          // Only preset fictitious test accounts exist under the demo: subject prefix.
+          const { db } = getDb();
+          const id = await findUserIdByAuthSubject(db, `demo:${login}`);
+          if (!id) return null;
+          await recordLogin(db, id);
+          return { id };
         },
       }),
     ]
@@ -47,8 +52,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: { signIn: "/login" },
   trustHost: cfg.mode === "demo",
   callbacks: {
-    jwt({ token, user }) {
-      if (user?.id) token.uid = user.id;
+    async jwt({ token, user, account, profile }) {
+      if (account?.provider === "oidc" && profile?.sub) {
+        // First OIDC login creates the user; the token keeps only our user id.
+        const name = typeof profile.name === "string" ? profile.name : null;
+        token.uid = await ensureUserForSubject(getDb().db, `${process.env.OIDC_ISSUER}|${profile.sub}`, name);
+      } else if (user?.id) {
+        token.uid = user.id;
+      }
       return token;
     },
     session({ session, token }) {

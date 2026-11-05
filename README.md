@@ -2,7 +2,7 @@
 
 Marktplaats voor digitale voetballerskaarten met echte aankoop- en verkoopprijzen. Gebruikers ontdekken spelers, kopen kaarten bij uitgiftes, volgen hun ontwikkeling en verkopen kaarten aan andere gebruikers. Player Exchange publiceert een eigen referentiewaarde in euro's en ontvangt 5% verkoperscommissie op secundaire verkopen.
 
-> **Status: demo, fase 0 en 1 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
+> **Status: demo, fase 0, 1 en 2 opgeleverd.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
 
 ## Snel starten (lokale demo)
 
@@ -31,10 +31,10 @@ Inloggen in de demo gaat via **Inloggen** met een van de fictieve testaccounts:
 
 | Wat | Commando |
 |---|---|
-| Unit- en integratietests (Vitest) | `pnpm test` |
+| Unit- en integratietests (Vitest, vereist PostgreSQL) | `pnpm test` |
 | Databaseconstraints (vereist PostgreSQL en `psql`) | `pnpm test:db` |
 | Typecheck en build | `pnpm typecheck && pnpm build` |
-| End-to-end (Playwright, demo moet draaien) | `pnpm test:e2e` |
+| End-to-end (Playwright; `pnpm dev` of web + worker moeten draaien) | `pnpm test:e2e` |
 
 ## Uitvoeringsmodi
 
@@ -53,8 +53,8 @@ De server controleert de configuratie bij het starten (`packages/integrations/sr
 | `apps/web` | Next.js: klantinterface, beheer en `/api/v1` |
 | `apps/worker` | Achtergrondtaken |
 | `packages/domain` | Bedrijfsregels (geld, commissie, matching, toewijzing, seizoenen, limieten) |
-| `packages/db` | SQL-migraties en constrainttests |
-| `packages/demo` | Fictieve demowereld en read models |
+| `packages/db` | SQL-migraties, Drizzle-schema, catalogusimport, identiteit en autorisatie |
+| `packages/demo` | Fictieve demowereld, read models, seed en fixture-dataprovider |
 | `packages/integrations` | Leveranciersneutrale adaptercontracten en modusbewaking |
 | `docs/` | Dossier, besluiten, ADR's, status en wireframes |
 

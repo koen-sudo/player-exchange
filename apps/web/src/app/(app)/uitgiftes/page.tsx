@@ -115,8 +115,8 @@ export default async function DropsPage({ searchParams }: { searchParams: SP }) 
                   maxPerUser={selected.drop.maxPerUser}
                   windowLabel={`${weekdayTime(selected.drop.opensAt)}`}
                   isOpen={selected.drop.status === "OPEN"}
-                  canSubscribe={!!user?.canTrade}
-                  blockReason={!user ? "Log in om in te schrijven." : user.tradeBlockReason}
+                  canSubscribe={!!user?.canSubscribe}
+                  blockReason={!user ? "Log in om in te schrijven." : user.subscribeBlockReason}
                 />
               )}
             </aside>
