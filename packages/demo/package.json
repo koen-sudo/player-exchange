@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./seed": "./src/seed-sql.ts"
   },
   "dependencies": {
-    "@px/domain": "workspace:*"
+    "@px/domain": "workspace:*",
+    "@px/integrations": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

@@ -81,7 +81,7 @@ export interface PaymentProvider {
 // ---------------------------------------------------------------------------
 // Football data
 // ---------------------------------------------------------------------------
-export type ProviderCompetition = { externalId: string; name: string; countryCode: string; seasonExternalId: string };
+export type ProviderCompetition = { externalId: string; name: string; countryCode: string; seasonExternalId: string; seasonStartsOn?: string; seasonEndsOn?: string };
 export type ProviderTeam = { externalId: string; name: string; shortName?: string; competitionExternalId: string };
 export type ProviderPlayer = {
   externalId: string;
@@ -92,9 +92,15 @@ export type ProviderPlayer = {
   nationality?: string;
   teamExternalId: string;
   membershipType: "FIRST_TEAM" | "LOAN" | "YOUTH" | "RESERVE";
-  position?: string;
+  /** Platform role key (GOALKEEPER, CENTRE_BACK, …) when the provider position maps to one. */
+  role?: string;
 };
-export type Page<T> = { items: T[]; nextCursor: string | null; sourceVersion: string };
+/**
+ * One page of provider data. `isCompleteSnapshot` on the last page (nextCursor
+ * null) states that the full collection was delivered; only then may the
+ * import close memberships of entities that are missing (docs/07).
+ */
+export type Page<T> = { items: T[]; nextCursor: string | null; sourceVersion: string; isCompleteSnapshot?: boolean };
 
 export interface FootballDataProvider {
   readonly name: string;
