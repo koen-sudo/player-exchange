@@ -21,14 +21,16 @@ import type { Db, Executor } from "./client.ts";
 import { admissionFacts, writeAudit, type AppMode } from "./identity.ts";
 import { balancesFor, book, postings } from "./ledger.ts";
 import { applySettlementOutcome, continueAfterOperation, submitSettlement } from "./trading.ts";
+import { applyAllocationOutcome, continueAfterAllocationOperation, parseSeedKey, submitAllocation } from "./drops.ts";
 import { createPaymentSimulator, SIM_PROVIDER, type PaymentSimulator, type SimScenario as SimScenarioName } from "./payment-simulator.ts";
 
 export type PaymentsCtx = { db: Db; provider: PaymentProvider; providerName: string; mode: AppMode };
 
 type OpRow = {
   id: string;
-  type: "DEPOSIT" | "WITHDRAWAL" | "SECONDARY_SETTLEMENT";
+  type: "DEPOSIT" | "WITHDRAWAL" | "SECONDARY_SETTLEMENT" | "PRIMARY_SETTLEMENT";
   execution_id: string | null;
+  allocation_id: string | null;
   idempotency_key: string;
   provider_reference: string | null;
   amount_cents: string;
@@ -86,7 +88,7 @@ async function notify(tx: Executor, userId: string, template: string, dedupeKey:
 }
 
 const lockOp = async (tx: Executor, opId: string) =>
-  (await tx.execute<OpRow>(sql`SELECT id, type, execution_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
+  (await tx.execute<OpRow>(sql`SELECT id, type, execution_id, allocation_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
 
 // ---------------------------------------------------------------------------
 // Applying a provider outcome (the only place that books deposit/withdrawal money)
@@ -101,10 +103,8 @@ export async function applyOperationOutcome(tx: Executor, mode: AppMode, opId: s
   if (outcome.providerReference && !op.provider_reference) {
     await tx.execute(sql`UPDATE settlement_operations SET provider_reference = ${outcome.providerReference} WHERE id = ${op.id}`);
   }
-  if (op.type === "SECONDARY_SETTLEMENT") {
-    const r = await applySettlementOutcome(tx, mode, { id: op.id, execution_id: op.execution_id! }, outcome);
-    return r;
-  }
+  if (op.type === "SECONDARY_SETTLEMENT") return applySettlementOutcome(tx, mode, { id: op.id, execution_id: op.execution_id! }, outcome);
+  if (op.type === "PRIMARY_SETTLEMENT") return applyAllocationOutcome(tx, mode, { id: op.id, allocation_id: op.allocation_id! }, outcome);
   const finalise = async (status: "SUCCEEDED" | "FAILED", error: string | null) => {
     await tx.execute(sql`
       UPDATE settlement_operations SET status = ${status}, financially_processed_at = now(), outcome_known_at = now(),
@@ -337,7 +337,7 @@ export async function processInboxEvent(ctx: PaymentsCtx, eventId: string): Prom
     return r;
   });
   // A finished settlement frees its market for the next match.
-  if (applied === "FINALISED") await continueAfterOperation(ctx, op.id);
+  if (applied === "FINALISED") await continueAfter(ctx, op.id);
   return { http: 200, result: "PROCESSED" };
 }
 
@@ -349,10 +349,10 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
   const older = opts.olderThanSeconds ?? 10;
   const abandon = opts.abandonAfterSeconds ?? 15 * 60;
   const ops = (await ctx.db.execute<OpRow & { age: number }>(sql`
-    SELECT id, type, execution_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at,
+    SELECT id, type, execution_id, allocation_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at,
            extract(epoch FROM now() - created_at)::int AS age
       FROM settlement_operations
-     WHERE type IN ('DEPOSIT','WITHDRAWAL','SECONDARY_SETTLEMENT') AND provider = ${ctx.providerName} AND financially_processed_at IS NULL
+     WHERE type IN ('DEPOSIT','WITHDRAWAL','SECONDARY_SETTLEMENT','PRIMARY_SETTLEMENT') AND provider = ${ctx.providerName} AND financially_processed_at IS NULL
        AND status IN ('CREATED','SUBMITTED','PENDING','UNKNOWN') AND updated_at <= now() - make_interval(secs => ${older})
      ORDER BY updated_at LIMIT 50`)).rows;
   let finalised = 0;
@@ -373,6 +373,14 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
       }
       continue;
     }
+    if (op.type === "PRIMARY_SETTLEMENT" && (op.status === "CREATED" || op.status === "UNKNOWN")) {
+      const s = await submitAllocation(ctx, op.allocation_id!);
+      if (s === "DELIVERED" || s === "FAILED") {
+        finalised++;
+        await continueAfterAllocationOperation(ctx, op.id);
+      }
+      continue;
+    }
     const outcome = await ctx.provider.queryStatus({ idempotencyKey: op.idempotency_key });
     if (op.type === "DEPOSIT" && outcome.status === "UNKNOWN" && op.age > abandon) {
       // The provider never received this checkout request: no money moved.
@@ -385,7 +393,7 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
     const r = await ctx.db.transaction((tx) => applyOperationOutcome(tx, ctx.mode, op.id, outcome));
     if (r === "FINALISED") {
       finalised++;
-      if (op.type === "SECONDARY_SETTLEMENT") await continueAfterOperation(ctx, op.id);
+      await continueAfter(ctx, op.id);
     }
   }
   // Events that arrived before their operation was linked.
@@ -400,6 +408,13 @@ export async function pollOpenOperations(ctx: PaymentsCtx, opts: { olderThanSeco
     }
   }
   return { checked: ops.length, finalised };
+}
+
+/** A finished settlement frees its market (secondary) or its drop (primary) for the next step. */
+async function continueAfter(ctx: PaymentsCtx, opId: string): Promise<void> {
+  const t = (await ctx.db.execute<{ type: string }>(sql`SELECT type FROM settlement_operations WHERE id = ${opId}`)).rows[0]?.type;
+  if (t === "SECONDARY_SETTLEMENT") await continueAfterOperation(ctx, opId);
+  else if (t === "PRIMARY_SETTLEMENT") await continueAfterAllocationOperation(ctx, opId);
 }
 
 // ---------------------------------------------------------------------------
@@ -447,11 +462,12 @@ export async function paymentAccountFor(db: Executor, userId: string, provider: 
  * simulator exists until a payment partner is chosen (O-02); production
  * refuses the simulator at startup (env-check, AT-35).
  */
-export function paymentsContext(db: Db, cfg: { mode: AppMode; adapters: { payment: string }; paymentWebhookSecret: string }, opts: { scenario?: SimScenarioName } = {}): PaymentsCtx & { simulator: PaymentSimulator | null } {
+export function paymentsContext(db: Db, cfg: { mode: AppMode; adapters: { payment: string }; paymentWebhookSecret: string; dropSeedKey?: string }, opts: { scenario?: SimScenarioName } = {}): PaymentsCtx & { simulator: PaymentSimulator | null; seedKey: Buffer } {
+  const seedKey = parseSeedKey(cfg.dropSeedKey ?? "");
   if (cfg.adapters.payment === "demo") {
     if (cfg.mode !== "demo") throw new Error("de betaalsimulator is alleen toegestaan in demo-modus");
     const simulator = createPaymentSimulator(db, { secret: cfg.paymentWebhookSecret, scenarioFor: () => opts.scenario ?? "SUCCESS" });
-    return { db, provider: simulator, providerName: SIM_PROVIDER, mode: cfg.mode, simulator };
+    return { db, provider: simulator, providerName: SIM_PROVIDER, mode: cfg.mode, simulator, seedKey };
   }
   throw new Error(`betaalpartner "${cfg.adapters.payment}" is nog niet aangesloten (O-02)`);
 }

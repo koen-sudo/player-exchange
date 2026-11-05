@@ -1,9 +1,9 @@
-import { APPROVAL_ACTIONS, getDb, listApprovals, type ApprovalAction } from "@px/db";
+import { APPROVAL_ACTIONS, getDb, listAllPlayersInternal, listApprovals, type ApprovalAction } from "@px/db";
 import { Card, DisabledReason, PageTitle, Pill } from "@/components/ui";
 import { Flash } from "@/components/flash";
 import { NotAllowed } from "@/components/login-required";
 import { currentUser, hasPermission } from "@/server/session";
-import { dateTime } from "@/lib/format";
+import { dateTime, euro } from "@/lib/format";
 import { decide } from "../actions";
 
 export const metadata = { title: "Goedkeuringen" };
@@ -21,12 +21,16 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: SP
   if (!canDecide && !hasPermission(user, "issuance.prepare")) return <NotAllowed />;
   const sp = await searchParams;
   const approvals = await listApprovals(getDb().db, { limit: 50 });
+  const names = new Map((await listAllPlayersInternal(getDb().db)).map((p) => [p.id, p.display_name]));
   const open = approvals.filter((a) => a.status === "REQUESTED");
   const rest = approvals.filter((a) => a.status !== "REQUESTED");
 
   const describe = (a: (typeof approvals)[number]) => {
     const p = a.payload as Record<string, unknown>;
-    return a.action_type === "PUBLISH_PROGRAMME" ? `Editie ${p.seasonKey}, versie ${p.version}: ${p.plannedTotal} kaarten` : JSON.stringify(p);
+    if (a.action_type === "PUBLISH_PROGRAMME") return `Editie ${p.seasonKey}, versie ${p.version}: ${p.plannedTotal} kaarten`;
+    if (a.action_type === "PUBLISH_DROP") return `${names.get(String(p.playerId)) ?? "Speler"}: ${p.quantity} kaarten à ${euro(Number(p.priceCents))}, inschrijving ${dateTime(String(p.opensAt))} – ${dateTime(String(p.closesAt))}`;
+    if (a.action_type === "CHANGE_DROP_PRICE") return `Prijs van ${euro(Number(p.oldPriceCents))} naar ${euro(Number(p.newPriceCents))}`;
+    return JSON.stringify(p);
   };
 
   return (

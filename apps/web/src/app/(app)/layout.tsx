@@ -3,9 +3,11 @@ import { NavLink } from "@/components/nav-link";
 import { IconBell, IconHome, IconLayers, IconMarket, IconSearch, IconSwap, IconUser, IconWallet, IconShield, Logo } from "@/components/icons";
 import { currentUser, hasAdminRole } from "@/server/session";
 import { signOut } from "@/auth";
+import { getDb, unreadNotifications } from "@px/db";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
+  const unread = user ? await unreadNotifications(getDb().db, user.id) : 0;
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Demo banner: the demo is never presented as a live service (docs/10). */}
@@ -25,10 +27,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </label>
         </form>
         <div className="ml-auto flex items-center gap-3 text-white">
-          <span title="Meldingen worden in een volgende fase aangesloten" className="opacity-60">
-            <IconBell className="h-6 w-6" />
-            <span className="sr-only">Meldingen (nog niet beschikbaar)</span>
-          </span>
+          {user ? (
+            <Link href="/meldingen" className="relative rounded-lg p-1 hover:bg-white/10" aria-label={unread ? `Meldingen, ${unread} ongelezen` : "Meldingen"}>
+              <IconBell className="h-6 w-6" />
+              {unread > 0 && <span aria-hidden className="absolute -right-1 -top-1 min-w-5 rounded-full bg-amber-400 px-1 text-center text-xs font-bold text-navy">{unread > 9 ? "9+" : unread}</span>}
+            </Link>
+          ) : null}
           {user ? (
             <details className="relative">
               <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 hover:bg-white/10">

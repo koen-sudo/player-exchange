@@ -105,6 +105,9 @@ export type Drop = {
   status: "PUBLISHED" | "OPEN" | "CLOSED" | "COMPLETED" | "CANCELLED";
   allocationMethod: "RANDOM_IF_OVERSUBSCRIBED";
   seedCommitment: string;
+  /** Public verification after the drawing (fase 6, from the database). */
+  verification?: { seedRevealed: string | null; participants: number | null; participantsDigest: string | null; resultDigest: string | null; delivered: number } | null;
+  priceChanges?: number;
 };
 
 export type DemoUser = {
@@ -148,7 +151,7 @@ export type DemoSubscription = {
   id: string;
   userId: string;
   dropId: string;
-  status: "CONFIRMED" | "ALLOCATED" | "DELIVERED" | "NOT_ALLOCATED" | "WAITLISTED";
+  status: "PENDING" | "CONFIRMED" | "ALLOCATED" | "DELIVERED" | "NOT_ALLOCATED" | "WAITLISTED" | "CANCELLED";
   reservedCents: Cents;
 };
 

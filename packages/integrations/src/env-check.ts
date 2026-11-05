@@ -31,6 +31,8 @@ export type AppConfig = {
   readonly paymentWebhookSecret: string;
   /** Where the web app is reachable for the worker (simulated webhooks in demo). */
   readonly webBaseUrl: string;
+  /** 256-bit key (hex) that encrypts drop allocation seeds at rest (BR-11). */
+  readonly dropSeedKey: string;
 };
 
 export class ConfigError extends Error {
@@ -43,6 +45,8 @@ export class ConfigError extends Error {
 }
 
 const DEMO_ADAPTERS = new Set(["demo", "fixture", "simulator"]);
+/** The publicly known demo key from .env.example; refused in production. */
+export const DEMO_DROP_SEED_KEY = "d0d0".repeat(16);
 
 function bool(v: string | undefined): boolean {
   return v === "true" || v === "1";
@@ -68,11 +72,13 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     authSecret: env.AUTH_SECRET ?? "",
     paymentWebhookSecret: env.PAYMENT_WEBHOOK_SECRET ?? "",
     webBaseUrl: env.WEB_BASE_URL ?? "http://localhost:3000",
+    dropSeedKey: env.DROP_SEED_KEY ?? "",
   };
 
   if (!cfg.databaseUrl) problems.push("DATABASE_URL ontbreekt");
   if (!cfg.authSecret) problems.push("AUTH_SECRET ontbreekt");
   if (!cfg.paymentWebhookSecret) problems.push("PAYMENT_WEBHOOK_SECRET ontbreekt");
+  if (!/^[0-9a-f]{64}$/i.test(cfg.dropSeedKey)) problems.push("DROP_SEED_KEY moet 64 hexadecimale tekens (256 bit) zijn");
   for (const [k, v] of Object.entries(cfg.adapters)) {
     if (!v) problems.push(`adapter ${k} is niet ingesteld`);
   }
@@ -93,6 +99,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     if (cfg.paymentWebhookSecret.startsWith("demo-") || cfg.paymentWebhookSecret.length < 32) {
       problems.push("PAYMENT_WEBHOOK_SECRET is te zwak voor productie");
     }
+    if (cfg.dropSeedKey.toLowerCase() === DEMO_DROP_SEED_KEY) problems.push("DROP_SEED_KEY is de demosleutel en niet toegestaan in productie");
   }
 
   if (problems.length) throw new ConfigError(problems);

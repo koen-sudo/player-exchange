@@ -12,6 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ["/beheer/catalogus", "Catalogus", hasPermission(user, "catalog.view")],
     ["/beheer/spelers", "Spelers", hasPermission(user, "catalog.view")],
     ["/beheer/voorraad", "Voorraad", hasPermission(user, "catalog.view")],
+    ["/beheer/uitgiftes", "Uitgiftes", hasPermission(user, "issuance.prepare") || hasPermission(user, "catalog.view")],
     ["/beheer/goedkeuringen", "Goedkeuringen", hasPermission(user, "approvals.decide") || hasPermission(user, "issuance.prepare")],
     ["/beheer/handel", "Handel", hasPermission(user, "trading.view")],
     ["/beheer/betalingen", "Betalingen", hasPermission(user, "finance.operate") || hasPermission(user, "finance.reconcile") || hasPermission(user, "approvals.decide")],

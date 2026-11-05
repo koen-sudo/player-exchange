@@ -29,6 +29,7 @@ jobs:
       NOTIFICATION_PROVIDER: demo
       PAYMENT_WEBHOOK_SECRET: demo-ci-webhook-secret
       WEB_BASE_URL: http://localhost:3000
+      DROP_SEED_KEY: d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0
       PGHOST: localhost
       PGUSER: px
       PGPASSWORD: px

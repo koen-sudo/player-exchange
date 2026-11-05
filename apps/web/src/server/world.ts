@@ -3,19 +3,19 @@
  *
  * From PostgreSQL: competitions, teams, players (status, admission, team,
  * role, published reference), supply per player, order book levels, last
- * trade (when there is one), and the signed-in user's
+ * trade (when there is one), drops and the user's subscriptions, and the signed-in user's
  * card holdings, reservations and orders, and cash balances from the ledger.
  *
  * From the demo world until their phase moves them to the database:
- * the last trade before the first real one (R-46), drops and subscriptions (fase 6), match lines and
+ * the last trade before the first real one (R-46), match lines and
  * the previous reference value used for the change column (fase 7).
  * Overlay data is joined by player id, which the seed keeps identical.
  */
 import "server-only";
 import { cache } from "react";
 import { cents, seasonKeyFor } from "@px/domain";
-import { balancesFor, getDb, holdingsFor, lastTrades, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
-import { demoWorld, type DemoWorld, type Player, type Role } from "@px/demo";
+import { balancesFor, getDb, holdingsFor, lastTrades, listDropsForUser, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
+import { demoWorld, type DemoSubscription, type DemoWorld, type Drop, type Player, type Role } from "@px/demo";
 
 const ROLES = new Set<Role>(["GOALKEEPER", "CENTRE_BACK", "FULL_BACK", "DEFENSIVE_MIDFIELDER", "CENTRAL_MIDFIELDER", "WINGER", "STRIKER"]);
 
@@ -23,7 +23,38 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
   const overlay = demoWorld();
   const { db } = getDb();
   const season = seasonKeyFor(new Date());
-  const [rows, supply, levels, trades] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season), orderBookLevels(db), lastTrades(db)]);
+  const [rows, supply, levels, trades, dropRows] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season), orderBookLevels(db), lastTrades(db), listDropsForUser(db, userId)]);
+  const DROP_STATUS: Record<string, Drop["status"]> = { PUBLISHED: "PUBLISHED", OPEN: "OPEN", CLOSED: "CLOSED", ALLOCATING: "CLOSED", SETTLING: "CLOSED", COMPLETED: "COMPLETED", CANCELLED: "CANCELLED", POSTPONED: "CANCELLED" };
+  const drops: Drop[] = dropRows.map((d) => ({
+    id: d.id,
+    playerId: d.player_id,
+    edition: d.season_key,
+    priceCents: cents(Number(d.price_cents)),
+    quantity: d.quantity,
+    maxPerUser: d.max_per_user,
+    publishedAt: new Date(d.publishes_at),
+    opensAt: new Date(d.opens_at),
+    closesAt: new Date(d.closes_at),
+    status: DROP_STATUS[d.status] ?? "CLOSED",
+    allocationMethod: "RANDOM_IF_OVERSUBSCRIBED",
+    seedCommitment: d.seed_commitment ?? "",
+    verification: { seedRevealed: d.seed_revealed, participants: d.participants, participantsDigest: d.participants_digest, resultDigest: d.result_digest, delivered: d.delivered },
+    priceChanges: d.price_changes,
+  }));
+  const SUB_STATUS: Record<string, DemoSubscription["status"]> = {
+    RESERVATION_PENDING: "PENDING", CONFIRMED: "CONFIRMED", WAITLISTED: "WAITLISTED", NOT_ALLOCATED: "NOT_ALLOCATED", RELEASED: "NOT_ALLOCATED", INVALID_LATE: "NOT_ALLOCATED", CANCELLED: "CANCELLED",
+  };
+  const subscriptions: DemoSubscription[] = userId
+    ? dropRows.filter((d) => d.my_subscription_id).map((d) => ({
+        id: d.my_subscription_id!,
+        userId,
+        dropId: d.id,
+        status: d.my_status === "ALLOCATED" ? (d.my_allocation === "DELIVERED" ? "DELIVERED" : "ALLOCATED") : SUB_STATUS[d.my_status!] ?? "NOT_ALLOCATED",
+        reservedCents: cents(["CONFIRMED", "WAITLISTED", "RESERVATION_PENDING"].includes(d.my_status!) ? Number(d.price_cents) : 0),
+      }))
+    : [];
+  const nextDrop = new Map<string, Date>();
+  for (const d of drops) if (d.status === "PUBLISHED" || d.status === "OPEN") if (!nextDrop.has(d.playerId)) nextDrop.set(d.playerId, d.opensAt);
   const book = new Map<string, { bids: { price: ReturnType<typeof cents>; quantity: number }[]; asks: { price: ReturnType<typeof cents>; quantity: number }[] }>();
   for (const l of levels) {
     const b = book.get(l.player_id) ?? { bids: [], asks: [] };
@@ -88,7 +119,7 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
         soldThisSeason: s?.sold_this_season ?? 0,
         plannedThisSeason: s?.planned_this_season ?? 0,
         seasonMaximum: 500,
-        nextDropAt: o?.supply.nextDropAt ?? null,
+        nextDropAt: nextDrop.get(r.id) ?? null,
       },
       recentMatches: o?.recentMatches ?? [],
       isFictional: true,
@@ -135,5 +166,7 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
     holdings,
     orders,
     balances,
+    drops,
+    subscriptions,
   };
 });

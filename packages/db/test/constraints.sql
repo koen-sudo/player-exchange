@@ -235,9 +235,13 @@ UPDATE valuation_runs SET status = 'PUBLISHED', published_at = now() WHERE id = 
 SELECT pg_temp.expect((SELECT amount_cents FROM public_reference_values) = 640, 'published valuation becomes public');
 
 -- Subscriptions and allocation --------------------------------------------------------------
-INSERT INTO drops(id, edition_id, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status, seed_commitment)
+INSERT INTO drops(id, edition_id, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status, seed_commitment, price_fixed_at)
   VALUES ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 600, 5, 1,
-          '2026-11-05T17:00:00Z', '2026-11-10T08:00:00Z', '2026-11-10T20:00:00Z', 'OPEN', repeat('a', 64));
+          '2026-11-05T17:00:00Z', '2026-11-10T08:00:00Z', '2026-11-10T20:00:00Z', 'OPEN', repeat('a', 64), '2026-11-10T08:00:00Z');
+SELECT pg_temp.expect_error($$UPDATE drops SET price_cents = 650 WHERE id = 'a0000000-0000-0000-0000-000000000001'$$,
+  'V-01a drop price changed after opening');
+SELECT pg_temp.expect_error($$UPDATE drops SET seed_revealed = repeat('b', 64) WHERE id = 'a0000000-0000-0000-0000-000000000001'$$,
+  'BR-11 seed revealed before the drawing');
 SELECT pg_temp.expect_error($$INSERT INTO drops(edition_id, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status)
   VALUES ('30000000-0000-0000-0000-000000000001', 600, 5, 1, now(), now() + interval '1 day', now() + interval '2 days', 'OPEN')$$,
   'BR-11 drop opened without a seed commitment');

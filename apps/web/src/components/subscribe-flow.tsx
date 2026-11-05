@@ -2,12 +2,15 @@
 
 /**
  * Drop subscription (UX-05): review offer → check subscription → reserve and
- * confirm → wait for allocation → outcome. In this demo build step 3 explains
- * that the reservation service is not connected yet; nothing is reserved.
+ * confirm → wait for allocation → outcome. The server reserves the amount and
+ * confirms; this component never decides price or eligibility.
  */
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { subscribeAction } from "@/app/(app)/uitgiftes/actions";
 
 type Props = {
+  dropId: string;
   playerName: string;
   priceLabel: string;
   quantity: number;
@@ -20,7 +23,11 @@ type Props = {
 
 export function SubscribeFlow(p: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [requestKey, setRequestKey] = useState("");
   const [alert, setAlert] = useState(false);
 
   if (!p.isOpen) {
@@ -29,18 +36,29 @@ export function SubscribeFlow(p: Props) {
         <button type="button" onClick={() => setAlert(true)} aria-pressed={alert} className="w-full rounded-lg bg-primary py-3 font-semibold text-white">
           {alert ? "Melding ingesteld (demo)" : "Melding instellen"}
         </button>
-        <p className="mt-1 text-xs text-muted">{alert ? "In de demo wordt de melding niet verstuurd; meldingen worden in een volgende fase aangesloten." : `Inschrijving opent ${p.windowLabel}.`}</p>
+        <p className="mt-1 text-xs text-muted">{alert ? "In de demo wordt de melding niet verstuurd; e-mail- en pushmeldingen volgen later." : `Inschrijving opent ${p.windowLabel}.`}</p>
       </div>
     );
   }
 
+  async function confirm() {
+    setBusy(true);
+    try {
+      const r = await subscribeAction(p.dropId, requestKey);
+      setResult(r);
+      setStep(3);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div>
-      <button type="button" disabled={!p.canSubscribe} onClick={() => { setStep(1); ref.current?.showModal(); }} className="w-full rounded-lg bg-primary py-3 font-semibold text-white disabled:opacity-50">
+      <button type="button" disabled={!p.canSubscribe} onClick={() => { setStep(1); setResult(null); setRequestKey(crypto.randomUUID()); ref.current?.showModal(); }} className="w-full rounded-lg bg-primary py-3 font-semibold text-white disabled:opacity-50">
         Inschrijven
       </button>
       {!p.canSubscribe && p.blockReason && <p className="mt-1 text-xs text-muted">{p.blockReason}</p>}
-      <dialog ref={ref} aria-label="Inschrijving controleren" className="m-auto max-h-[90dvh] w-[min(30rem,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0">
+      <dialog ref={ref} onClose={() => { if (result?.ok) router.refresh(); }} aria-label="Inschrijving controleren" className="m-auto max-h-[90dvh] w-[min(30rem,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0 backdrop:bg-navy/50">
         <div className="bg-navy px-4 py-3 font-semibold text-white">Stap {step} van 3 · Inschrijving</div>
         <div className="space-y-3 p-4 text-sm">
           {step === 1 && (
@@ -53,22 +71,24 @@ export function SubscribeFlow(p: Props) {
           {step === 2 && (
             <>
               <p>Bij bevestiging wordt <strong className="num">{p.priceLabel}</strong> van je beschikbare saldo gereserveerd.</p>
-              <p className="text-muted">Je betaalt alleen bij toewijzing. Krijg je geen kaart, dan wordt de reservering vrijgegeven.</p>
+              <p className="text-muted">Je betaalt alleen bij toewijzing. Krijg je geen kaart, dan wordt de reservering vrijgegeven. Tot de sluiting kun je je afmelden.</p>
             </>
           )}
-          {step === 3 && (
-            <p role="status" className="rounded-lg bg-warn-soft px-3 py-2">Demo: er is niets gereserveerd en je bent niet ingeschreven. De reservering en toewijzing worden in fase 6 aangesloten.</p>
+          {step === 3 && result && (
+            <p role="status" className={`rounded-lg px-3 py-2 ${result.ok ? "bg-primary-soft" : "bg-danger-soft text-down"}`}>{result.message}</p>
           )}
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <button type="button" onClick={() => (step === 1 ? ref.current?.close() : setStep((s) => (s - 1) as 1 | 2))} className="rounded-lg border border-slate-300 py-2.5">
-              {step === 1 ? "Annuleren" : "Terug"}
-            </button>
             {step < 3 ? (
-              <button type="button" onClick={() => setStep((s) => (s + 1) as 2 | 3)} className="rounded-lg bg-primary py-2.5 font-semibold text-white">
-                {step === 1 ? "Controleren" : "Bedrag reserveren en inschrijven"}
-              </button>
+              <>
+                <button type="button" onClick={() => (step === 1 ? ref.current?.close() : setStep(1))} className="rounded-lg border border-slate-300 py-2.5">
+                  {step === 1 ? "Annuleren" : "Terug"}
+                </button>
+                <button type="button" disabled={busy} onClick={() => (step === 1 ? setStep(2) : confirm())} className="rounded-lg bg-primary py-2.5 font-semibold text-white disabled:opacity-50">
+                  {step === 1 ? "Controleren" : "Bedrag reserveren en inschrijven"}
+                </button>
+              </>
             ) : (
-              <button type="button" onClick={() => ref.current?.close()} className="rounded-lg bg-primary py-2.5 font-semibold text-white">Sluiten</button>
+              <button type="button" onClick={() => ref.current?.close()} className="col-span-2 rounded-lg bg-primary py-2.5 font-semibold text-white">Sluiten</button>
             )}
           </div>
         </div>

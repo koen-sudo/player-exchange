@@ -12,7 +12,8 @@ import { DomainError } from "@px/domain";
 import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTION_TYPES_LIST } from "@px/db";
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
-import { approveBreakResolution, proposeBreakResolution, runReconciliation } from "@px/db";
+import { applyDropPriceChange, approveBreakResolution, demoShiftSchedule, proposeBreakResolution, proposeDrop, publishDrop, requestDropPriceChange, runReconciliation } from "@px/db";
+import { euroInputToMinor } from "@/lib/format";
 import {
   createDraftProgramme,
   decideApproval,
@@ -185,5 +186,67 @@ export async function approveResolution(formData: FormData) {
   await guarded("/beheer/betalingen", async (user) => {
     await approveBreakResolution(getDb().db, user, { breakId: str(formData, "breakId"), reason: str(formData, "reason") });
     return "Verschil afgehandeld en vastgelegd in de auditlog.";
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Drops (fase 6)
+// ---------------------------------------------------------------------------
+/** "2026-11-10T09:00" in Europe/Amsterdam → UTC instant. */
+function amsterdamLocal(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new FormError("Kies een geldige datum en tijd.");
+  const asUtc = new Date(`${value}:00Z`);
+  const offset = (d: Date) => {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Amsterdam", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(d);
+    const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+    return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute")) - d.getTime();
+  };
+  return new Date(asUtc.getTime() - offset(new Date(asUtc.getTime() - offset(asUtc))));
+}
+
+export async function proposeDropAction(formData: FormData) {
+  await guarded("/beheer/uitgiftes", async (user) => {
+    const price = euroInputToMinor(str(formData, "price"));
+    if (!price) throw new FormError("Vul een geldige prijs in, bijvoorbeeld 6,00.");
+    await proposeDrop(getDb().db, user, {
+      playerId: str(formData, "playerId"),
+      priceCents: Number(price),
+      quantity: Number(str(formData, "quantity")),
+      opensAt: amsterdamLocal(str(formData, "opensAt")),
+      closesAt: amsterdamLocal(str(formData, "closesAt")),
+      reason: str(formData, "reason"),
+    });
+    return "Uitgifte als concept vastgelegd en goedkeuring aangevraagd. Een tweede bevoegde persoon moet akkoord geven.";
+  });
+}
+
+export async function publishDropAction(formData: FormData) {
+  await guarded("/beheer/uitgiftes", async (user) => {
+    await publishDrop(payments(), user, { dropId: str(formData, "dropId"), approvalId: str(formData, "approvalId") });
+    return "Uitgifte gepubliceerd. De kaarten zijn aangemaakt en de commitment van de trekking is vastgelegd.";
+  });
+}
+
+export async function requestDropPriceAction(formData: FormData) {
+  await guarded("/beheer/uitgiftes", async (user) => {
+    const price = euroInputToMinor(str(formData, "price"));
+    if (!price) throw new FormError("Vul een geldige prijs in, bijvoorbeeld 6,00.");
+    await requestDropPriceChange(getDb().db, user, { dropId: str(formData, "dropId"), newPriceCents: Number(price), reason: str(formData, "reason") });
+    return "Prijswijziging aangevraagd. Na goedkeuring kun je hem doorvoeren.";
+  });
+}
+
+export async function applyDropPriceAction(formData: FormData) {
+  await guarded("/beheer/uitgiftes", async (user) => {
+    await applyDropPriceChange(getDb().db, user, { dropId: str(formData, "dropId"), approvalId: str(formData, "approvalId"), newPriceCents: Number(str(formData, "newPriceCents")) });
+    return "Nieuwe prijs doorgevoerd en vastgelegd in de prijshistorie.";
+  });
+}
+
+export async function demoDropScheduleAction(formData: FormData) {
+  await guarded("/beheer/uitgiftes", async (user) => {
+    const action = str(formData, "action") === "CLOSE_NOW" ? "CLOSE_NOW" : "OPEN_NOW";
+    await demoShiftSchedule(payments(), user, { dropId: str(formData, "dropId"), action });
+    return action === "OPEN_NOW" ? "Demo: inschrijving geopend." : "Demo: inschrijving gesloten; de trekking en afwikkeling zijn uitgevoerd.";
   });
 }

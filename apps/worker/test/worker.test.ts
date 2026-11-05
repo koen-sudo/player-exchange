@@ -9,7 +9,7 @@ describe("worker skeleton", () => {
     );
   });
   it("starts in demo mode and stops cleanly", () => {
-    const w = startWorker({ APP_MODE: "demo", DEMO_LOGIN_ENABLED: "true", DATABASE_URL: "x", AUTH_SECRET: "y", PAYMENT_PROVIDER: "demo", IDENTITY_PROVIDER: "demo", FOOTBALL_DATA_PROVIDER: "fixture", NOTIFICATION_PROVIDER: "demo", PAYMENT_WEBHOOK_SECRET: "demo-secret" }, { pollMs: 0 });
+    const w = startWorker({ APP_MODE: "demo", DEMO_LOGIN_ENABLED: "true", DATABASE_URL: "x", AUTH_SECRET: "y", PAYMENT_PROVIDER: "demo", IDENTITY_PROVIDER: "demo", FOOTBALL_DATA_PROVIDER: "fixture", NOTIFICATION_PROVIDER: "demo", PAYMENT_WEBHOOK_SECRET: "demo-secret", DROP_SEED_KEY: "abababababababababababababababababababababababababababababababab" }, { pollMs: 0 });
     assert.equal(w.config.mode, "demo");
     w.stop();
   });

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { listDrops, type DropTab } from "@px/demo";
 import { Avatar, EmptyState, InfoNote, Money, PageTitle, Pill } from "@/components/ui";
 import { SubscribeFlow } from "@/components/subscribe-flow";
+import { Flash } from "@/components/flash";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { cancelSubscriptionAction } from "./actions";
 import { currentUser } from "@/server/session";
 import { euro, timeOnly, weekdayTime } from "@/lib/format";
 import { loadWorld } from "@/server/world";
@@ -9,7 +12,12 @@ import { loadWorld } from "@/server/world";
 export const metadata = { title: "Uitgiftes" };
 
 const TABS: [DropTab, string][] = [["binnenkort", "Binnenkort"], ["open", "Open"], ["mijn", "Mijn inschrijvingen"], ["afgerond", "Afgerond"]];
-const SUB_LABELS = { CONFIRMED: "Ingeschreven, wacht op toewijzing", ALLOCATED: "Kaart toegewezen, betaling in afwikkeling", DELIVERED: "Kaart geleverd", NOT_ALLOCATED: "Niet toegewezen, reservering vrijgegeven", WAITLISTED: "Op wachtlijst" } as const;
+const SUB_LABELS = {
+  PENDING: "Reservering wordt bevestigd", CONFIRMED: "Ingeschreven, wacht op toewijzing", ALLOCATED: "Kaart toegewezen, betaling in afwikkeling",
+  DELIVERED: "Kaart geleverd", NOT_ALLOCATED: "Niet toegewezen, reservering vrijgegeven", WAITLISTED: "Op wachtlijst", CANCELLED: "Afgemeld, reservering vrijgegeven",
+} as const;
+
+export const dynamic = "force-dynamic";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -30,6 +38,8 @@ export default async function DropsPage({ searchParams }: { searchParams: SP }) 
   return (
     <div>
       <PageTitle title="Uitgiftes" subtitle="Spelers, prijzen en aantallen vooraf bekend." />
+      <Flash melding={sp.melding} fout={sp.fout} />
+      {rows.some((r) => r.drop.status === "CLOSED" || r.subscription?.status === "ALLOCATED") && <AutoRefresh />}
 
       {next && (
         <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-line bg-primary-soft px-5 py-4">
@@ -62,8 +72,8 @@ export default async function DropsPage({ searchParams }: { searchParams: SP }) 
                 <tr>
                   <th className="px-4 py-2 font-medium">Speler</th>
                   <th className="px-4 py-2 text-right font-medium">Prijs per kaart</th>
-                  <th className="px-4 py-2 text-right font-medium">Aantal</th>
-                  <th className="px-4 py-2 text-right font-medium">Max. per persoon</th>
+                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Aantal</th>
+                  <th className="hidden px-4 py-2 text-right font-medium md:table-cell">Max. per persoon</th>
                   <th className="px-4 py-2 font-medium">Status</th>
                 </tr>
               </thead>
@@ -77,10 +87,10 @@ export default async function DropsPage({ searchParams }: { searchParams: SP }) 
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-right"><Money cents={r.drop.priceCents} /></td>
-                    <td className="num px-4 py-3 text-right">{r.drop.quantity}</td>
-                    <td className="num px-4 py-3 text-right">{r.drop.maxPerUser}</td>
+                    <td className="num hidden px-4 py-3 text-right sm:table-cell">{r.drop.quantity}</td>
+                    <td className="num hidden px-4 py-3 text-right md:table-cell">{r.drop.maxPerUser}</td>
                     <td className="px-4 py-3">
-                      {r.subscription ? <Pill tone="blue">{SUB_LABELS[r.subscription.status]}</Pill> : <Pill tone={r.drop.status === "OPEN" ? "green" : "grey"}>{r.drop.status === "PUBLISHED" ? "Binnenkort" : r.drop.status === "OPEN" ? "Open" : "Afgerond"}</Pill>}
+                      {r.subscription ? <Pill tone={r.subscription.status === "DELIVERED" ? "green" : "blue"}>{SUB_LABELS[r.subscription.status]}</Pill> : <Pill tone={r.drop.status === "OPEN" ? "green" : "grey"}>{r.drop.status === "PUBLISHED" ? "Binnenkort" : r.drop.status === "OPEN" ? "Open" : r.drop.status === "CLOSED" ? "Toewijzing loopt" : "Afgerond"}</Pill>}
                     </td>
                   </tr>
                 ))}
@@ -106,20 +116,48 @@ export default async function DropsPage({ searchParams }: { searchParams: SP }) 
                 <div className="col-span-2 rounded-lg border border-line p-2"><dt className="text-muted">Te reserveren bij inschrijving</dt><dd className="num font-semibold">{euro(selected.drop.priceCents * selected.drop.maxPerUser)}</dd></div>
               </dl>
               <InfoNote>Het bedrag wordt gereserveerd bij inschrijving; je betaalt alleen bij toewijzing. Bij meer inschrijvingen dan kaarten volgt een willekeurige, controleerbare toewijzing.</InfoNote>
-              {selected.drop.status === "COMPLETED" ? (
-                <p className="text-sm text-muted">Deze uitgifte is afgerond.</p>
-              ) : (
+              {selected.subscription && (
+                <div className="rounded-lg border border-line p-3 text-sm" data-testid="my-subscription">
+                  <p className="font-semibold">Jouw inschrijving</p>
+                  <p>{SUB_LABELS[selected.subscription.status]}</p>
+                  {selected.subscription.status === "CONFIRMED" && selected.drop.status === "OPEN" && (
+                    <form action={cancelSubscriptionAction} className="mt-2">
+                      <input type="hidden" name="subscriptionId" value={selected.subscription.id} />
+                      <input type="hidden" name="terug" value={href({ uitgifte: selected.drop.id })} />
+                      <button className="w-full rounded-lg border border-slate-300 py-2 hover:border-down hover:text-down">Afmelden</button>
+                    </form>
+                  )}
+                </div>
+              )}
+              {selected.drop.status === "COMPLETED" || selected.drop.status === "CLOSED" || selected.drop.status === "CANCELLED" ? (
+                <p className="text-sm text-muted">{selected.drop.status === "CLOSED" ? "De inschrijving is gesloten; de toewijzing en afwikkeling lopen." : selected.drop.status === "CANCELLED" ? "Deze uitgifte is geannuleerd." : "Deze uitgifte is afgerond."}</p>
+              ) : selected.subscription && selected.subscription.status !== "CANCELLED" ? null : (
                 <SubscribeFlow
+                  dropId={selected.drop.id}
                   playerName={selected.player.displayName}
                   priceLabel={euro(selected.drop.priceCents)}
                   quantity={selected.drop.quantity}
                   maxPerUser={selected.drop.maxPerUser}
                   windowLabel={`${weekdayTime(selected.drop.opensAt)}`}
                   isOpen={selected.drop.status === "OPEN"}
-                  canSubscribe={!!user?.canSubscribe}
-                  blockReason={!user ? "Log in om in te schrijven." : user.subscribeBlockReason}
+                  canSubscribe={!!user?.canSubscribe && selected.subscription?.status !== "CANCELLED"}
+                  blockReason={!user ? "Log in om in te schrijven." : selected.subscription?.status === "CANCELLED" ? "Je hebt je voor deze uitgifte afgemeld." : user.subscribeBlockReason}
                 />
               )}
+              <details className="text-xs text-muted">
+                <summary className="cursor-pointer">Controleerbare trekking</summary>
+                <dl className="mt-2 space-y-1 break-all">
+                  <div><dt className="font-medium text-ink">Vastgelegde commitment (SHA-256)</dt><dd className="font-mono">{selected.drop.seedCommitment || "Wordt vóór opening vastgelegd"}</dd></div>
+                  {selected.drop.verification?.seedRevealed && (
+                    <>
+                      <div><dt className="font-medium text-ink">Seed (na de trekking vrijgegeven)</dt><dd className="font-mono">{selected.drop.verification.seedRevealed}</dd></div>
+                      <div><dt className="font-medium text-ink">Deelnemers</dt><dd>{selected.drop.verification.participants} · digest <span className="font-mono">{selected.drop.verification.participantsDigest}</span></dd></div>
+                      <div><dt className="font-medium text-ink">Resultaat-digest</dt><dd className="font-mono">{selected.drop.verification.resultDigest}</dd></div>
+                    </>
+                  )}
+                </dl>
+                <p className="mt-2">Algoritme alloc-v1: rangorde op HMAC-SHA256(seed, versie|uitgifte|deelnemersdigest|inschrijving). Er worden geen persoonsgegevens getoond.</p>
+              </details>
             </aside>
           )}
         </div>

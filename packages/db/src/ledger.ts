@@ -160,6 +160,21 @@ export const postings = {
       cr(A("PSP_SETTLEMENT_ASSET"), amount),
     ],
   }),
+  /** Primary allocation: the subscription's reserved price goes into settlement. */
+  allocationPending: (userId: string, allocationId: string, price: number) => ({
+    eventId: `allocation:${allocationId}:pending`, kind: "ALLOCATION_PENDING",
+    lines: [dr(A("CUSTOMER_RESERVED", userId), price), cr(A("PENDING_SETTLEMENT", userId), price)],
+  }),
+  /** Primary allocation settled: the price is platform revenue (primary sale, no seller). */
+  allocationSettled: (userId: string, allocationId: string, price: number) => ({
+    eventId: `allocation:${allocationId}:settled`, kind: "ALLOCATION_SETTLED",
+    lines: [dr(A("PENDING_SETTLEMENT", userId), price), cr(A("PRIMARY_REVENUE_CLEARING"), price)],
+  }),
+  /** Primary allocation definitively failed: money back to the reservation. */
+  allocationFailed: (userId: string, allocationId: string, price: number) => ({
+    eventId: `allocation:${allocationId}:failed`, kind: "ALLOCATION_FAILED",
+    lines: [dr(A("PENDING_SETTLEMENT", userId), price), cr(A("CUSTOMER_RESERVED", userId), price)],
+  }),
   /** Opening balance for pre-existing customer money (demo seed or migration). */
   openingBalance: (userId: string, amount: number, reference: string) => ({
     eventId: `opening:${userId}:${reference}`, kind: "OPENING_BALANCE",

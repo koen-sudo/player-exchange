@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
+import { claimNextRun, dropsCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -31,14 +31,14 @@ export const JOBS: JobDefinition[] = [
   { name: "fixtures.sync", schedule: "periodiek en na wedstrijdupdates", fase: 2, run: notYet(2) },
   { name: "external-valuations.check", schedule: "dagelijks", fase: 7, run: notYet(7) },
   { name: "valuation.weekly-run", schedule: "maandag 18.00 Europe/Amsterdam, na controle", fase: 7, run: notYet(7) },
-  { name: "drops.open-close", schedule: "op vastgelegde UTC-tijdstippen", fase: 6, run: notYet(6) },
+  { name: "drops.open-close", schedule: "elke 5 s: openen en sluiten op de vastgelegde UTC-tijdstippen, toewijzen, afwikkelen, wachtlijst", fase: 6, run: async () => undefined },
   { name: "orders.expire", schedule: "elke 5 s: vrije restanten van verlopen orders sluiten", fase: 5, run: async () => undefined },
   { name: "trading.match", schedule: "elke 5 s: markten met een kruisend orderboek en geen open afwikkeling", fase: 5, run: async () => undefined },
   { name: "payments.poll", schedule: "elke 5 s: open stortingen/opnames opvragen of opnieuw indienen, wachtende webhooks koppelen", fase: 4, run: async () => undefined },
   { name: "payments.simulator-webhooks", schedule: "alleen demo: elke 5 s de webhooks van de betaalsimulator afleveren", fase: 4, run: async () => undefined },
   { name: "settlement.poll", schedule: "elke 5 s, samen met payments.poll (dezelfde operatietabel)", fase: 5, run: async () => undefined },
   { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna", fase: 4, run: async () => undefined },
-  { name: "notifications.outbox", schedule: "continu via outbox", fase: 6, run: notYet(6) },
+  { name: "notifications.outbox", schedule: "in-app direct uit de outbox; e-mail en push volgen met een notificatieprovider", fase: 6, run: async () => undefined },
 ];
 
 /** Supplier adapter for the configured football data provider. */
@@ -116,6 +116,8 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
       const ctx = paymentsContext(db, cfg);
       const r = await paymentsOnce(ctx, `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
       if (r.delivered || r.finalised) console.log(JSON.stringify({ level: "info", msg: "payments cycle", ...r }));
+      const dr = await dropsCycle(ctx);
+      if (dr.opened || dr.allocated) console.log(JSON.stringify({ level: "info", msg: "drops cycle", ...dr }));
       const tr = await tradingOnce(ctx);
       if (tr.expired || tr.executions) console.log(JSON.stringify({ level: "info", msg: "trading cycle", ...tr }));
     } catch (e) {

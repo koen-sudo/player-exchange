@@ -15,7 +15,7 @@ const MODULES: [string, string, string, string | null][] = [
   ["Goedkeuringen", "Vier-ogenprincipe voor gevoelige handelingen", "approvals.decide", "/beheer/goedkeuringen"],
   ["Betalingsafwijkingen en reconciliatie", "Pending operaties, grootboek en aansluiting met de betaalpartner", "finance.operate", "/beheer/betalingen"],
   ["Orders en uitvoeringen", "Uitvoeringen, afwikkeling en handelsinvarianten", "trading.view", "/beheer/handel"],
-  ["Uitgifteplanning en toewijzingen", "Drops, trekkingen en wachtlijsten", "fase 6", null],
+  ["Uitgifteplanning en toewijzingen", "Drops, prijswijzigingen, trekkingen en wachtlijsten", "issuance.prepare", "/beheer/uitgiftes"],
   ["Waarderingsruns", "Concept, review en publicatie", "fase 7", null],
 ];
 

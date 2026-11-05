@@ -13,6 +13,7 @@ const demoEnv = {
   FOOTBALL_DATA_PROVIDER: "fixture",
   NOTIFICATION_PROVIDER: "demo",
   PAYMENT_WEBHOOK_SECRET: "demo-webhook-secret-change-me",
+  DROP_SEED_KEY: "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0",
 };
 
 describe("mode guard (AT-35)", () => {

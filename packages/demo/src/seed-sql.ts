@@ -80,6 +80,41 @@ export function seedSql(): string {
       `WHERE c.status = 'OWNED';`,
   );
 
+  // Drops (fase 6). Upcoming drops open next Tuesday 09:00–21:00 Europe/Amsterdam,
+  // relative to the moment of seeding. Their cards exist within the programme
+  // (IN_DROP); the worker fixes the seed commitment before opening. Earlier
+  // drops are demo history without a recorded drawing.
+  const nextTue = (h: number) =>
+    `((date_trunc('week', now() AT TIME ZONE 'Europe/Amsterdam') + interval '1 day ${h} hours' + CASE WHEN now() AT TIME ZONE 'Europe/Amsterdam' >= date_trunc('week', now() AT TIME ZONE 'Europe/Amsterdam') + interval '1 day 9 hours' THEN interval '7 days' ELSE interval '0' END) AT TIME ZONE 'Europe/Amsterdam')`;
+  const relTs = (d: Date) => `(now() - interval '${Math.round((w.now.getTime() - d.getTime()) / 1000)} seconds')`;
+  for (const d of w.drops) {
+    const edition = `e${d.playerId.slice(1)}`;
+    if (d.status === "PUBLISHED") {
+      const p = w.players.find((x) => x.id === d.playerId)!;
+      out.push(
+        `INSERT INTO drops(id, edition_id, round, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status, published_at) ` +
+          `VALUES (${q(d.id)}, ${q(edition)}, 1, ${d.priceCents}, ${d.quantity}, 1, least(now(), ${nextTue(9)} - interval '4 days 15 hours'), ${nextTue(9)}, ${nextTue(21)}, 'PUBLISHED', least(now(), ${nextTue(9)} - interval '4 days 15 hours'));`,
+      );
+      out.push(
+        `INSERT INTO cards(edition_id, player_id, serial_number, status) SELECT ${q(edition)}, ${q(p.id)}, g, 'IN_DROP' ` +
+          `FROM generate_series(${p.supply.inCirculation + 1}, ${p.supply.inCirculation + d.quantity}) g;`,
+      );
+      out.push(`INSERT INTO drop_cards(drop_id, card_id) SELECT ${q(d.id)}, id FROM cards WHERE edition_id = ${q(edition)} AND status = 'IN_DROP';`);
+    } else {
+      out.push(
+        `INSERT INTO drops(id, edition_id, round, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status, seed_commitment, price_fixed_at, published_at, allocated_at, completed_at) ` +
+          `VALUES (${q(d.id)}, ${q(edition)}, 1, ${d.priceCents}, ${d.quantity}, 1, ${relTs(d.publishedAt)}, ${relTs(d.opensAt)}, ${relTs(d.closesAt)}, 'COMPLETED', ${q(d.seedCommitment)}, ${relTs(d.opensAt)}, ${relTs(d.publishedAt)}, ${relTs(d.closesAt)}, ${relTs(d.closesAt)});`,
+      );
+    }
+  }
+  for (const sub of w.subscriptions) {
+    const d = w.drops.find((x) => x.id === sub.dropId)!;
+    out.push(
+      `INSERT INTO subscriptions(id, drop_id, user_id, quantity, status, confirmed_at, price_cents, outcome_at) ` +
+        `VALUES (${q(sub.id)}, ${q(sub.dropId)}, ${q(sub.userId)}, 1, 'NOT_ALLOCATED', ${relTs(d.opensAt)} + interval '1 hour', ${d.priceCents}, ${relTs(d.closesAt)});`,
+    );
+  }
+
   // Order book (fase 5): a fictitious collector's resting orders reproduce the
   // demo book, then Anna's own orders. Times are relative to the moment of
   // seeding, so the demo book does not run out on a fixed date. Levels that
