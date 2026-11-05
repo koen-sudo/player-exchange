@@ -8,6 +8,8 @@
  * for money, ownership or final order status: every job re-reads PostgreSQL
  * and protects double work with database unique keys.
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "@px/integrations/env";
 
 export type JobDefinition = {
@@ -50,7 +52,15 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
   return { stop: () => stop("manual"), config: cfg };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isMainModule(): boolean {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   try {
     startWorker();
   } catch (e) {

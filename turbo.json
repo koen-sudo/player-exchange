@@ -1,5 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "APP_MODE",
+    "DEMO_LOGIN_ENABLED",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "AUTH_SECRET",
+    "PAYMENT_PROVIDER",
+    "IDENTITY_PROVIDER",
+    "FOOTBALL_DATA_PROVIDER",
+    "NOTIFICATION_PROVIDER",
+    "OIDC_ISSUER",
+    "OIDC_CLIENT_ID",
+    "OIDC_CLIENT_SECRET"
+  ],
   "tasks": {
     "build": {
       "dependsOn": [

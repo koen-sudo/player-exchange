@@ -9,6 +9,8 @@
  * Called by web and worker before they accept work. A failing check throws and
  * the process exits: misconfiguration fails at startup, never at request time.
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export const APP_MODES = ["demo", "sandbox", "production"] as const;
 export type AppMode = (typeof APP_MODES)[number];
@@ -93,7 +95,15 @@ export function isDemoLoginAllowed(cfg: AppConfig): boolean {
 }
 
 // CLI: `node packages/integrations/src/env-check.ts` validates the current environment.
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isMainModule(): boolean {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   try {
     const cfg = loadConfig(process.env);
     console.log(`Configuratie geldig voor modus ${cfg.mode}.`);

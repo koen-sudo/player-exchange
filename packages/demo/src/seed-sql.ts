@@ -4,6 +4,8 @@
  *
  * Refuses to run unless APP_MODE=demo (demo data must never reach production).
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { demoWorld, type Player } from "./world.ts";
 
 const q = (v: string | null | undefined) => (v === null || v === undefined ? "NULL" : `'${v.replace(/'/g, "''")}'`);
@@ -74,7 +76,15 @@ function playerSql(p: Player): string {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isMainModule(): boolean {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   if (process.env.APP_MODE !== "demo") {
     console.error("Seed geweigerd: demodata mag alleen in APP_MODE=demo worden geladen.");
     process.exit(1);
