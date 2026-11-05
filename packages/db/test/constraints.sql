@@ -231,8 +231,16 @@ INSERT INTO valuation_runs(id, model_version_id, scope, data_version, informatio
 INSERT INTO player_reference_values(player_id, run_id, amount_cents, confidence)
   VALUES ('10000000-0000-0000-0000-000000000001', '90000000-0000-0000-0000-000000000002', 640, 'MEDIUM');
 SELECT pg_temp.expect((SELECT count(*) FROM public_reference_values) = 0, 'AT-29 draft valuation is not public');
+SELECT pg_temp.expect_error($$UPDATE valuation_runs SET status = 'PUBLISHED', published_at = now() WHERE id = '90000000-0000-0000-0000-000000000002'$$,
+  'a draft run cannot be published without approval');
+UPDATE valuation_runs SET status = 'VALIDATED' WHERE id = '90000000-0000-0000-0000-000000000002';
+SELECT pg_temp.expect_error($$UPDATE player_reference_values SET amount_cents = 1 WHERE run_id = '90000000-0000-0000-0000-000000000002'$$,
+  'values of a reviewed run cannot change');
+UPDATE valuation_runs SET status = 'APPROVED' WHERE id = '90000000-0000-0000-0000-000000000002';
 UPDATE valuation_runs SET status = 'PUBLISHED', published_at = now() WHERE id = '90000000-0000-0000-0000-000000000002';
 SELECT pg_temp.expect((SELECT amount_cents FROM public_reference_values) = 640, 'published valuation becomes public');
+SELECT pg_temp.expect_error($$UPDATE valuation_runs SET status = 'DRAFT', published_at = NULL WHERE id = '90000000-0000-0000-0000-000000000002'$$,
+  'a published run stays published');
 
 -- Subscriptions and allocation --------------------------------------------------------------
 INSERT INTO drops(id, edition_id, price_cents, quantity, max_per_user, publishes_at, opens_at, closes_at, status, seed_commitment, price_fixed_at)

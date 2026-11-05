@@ -41,13 +41,50 @@ export function seedSql(): string {
   }
 
   out.push(`INSERT INTO valuation_model_versions(id, version_key, is_demo, parameters, code_version, status) VALUES (${q(demoModel)}, 'demo-v0', true, '{"note":"demomodel, geen productieformule"}', 'demo', 'APPROVED');`);
+  // The run before the current one (for the change column), then the current one.
+  const prevRun = "d0000000-0000-4000-8000-00000000a003";
+  out.push(`INSERT INTO valuation_runs(id, model_version_id, scope, data_version, information_as_of, status, computed_at, published_at) VALUES (${q(prevRun)}, ${q(demoModel)}, 'all', 'fixture-0', '2026-10-26T06:00:00Z', 'PUBLISHED', '2026-10-26T16:30:00Z', '2026-10-26T17:00:00Z');`);
   out.push(`INSERT INTO valuation_runs(id, model_version_id, scope, data_version, information_as_of, status, computed_at, published_at) VALUES (${q(demoRun)}, ${q(demoModel)}, 'all', 'fixture-1', '2026-11-02T06:00:00Z', 'PUBLISHED', '2026-11-02T16:30:00Z', '2026-11-02T17:00:00Z');`);
+  // Fase 7: the demo model that the weekly run uses (explicitly a demo, not the production formula).
+  out.push(`INSERT INTO valuation_model_versions(version_key, is_demo, parameters, code_version, status, approved_at) VALUES ('demo-v1', true, ${q(JSON.stringify({ note: "Demomodel: S = c·√(M/M0) × (1 + vorm). Geen gevalideerde productieformule.", cCents: 500, m0Cents: 1_000_000_000, formCap: 0.15 }))}, 'domain/valuation.ts@demo-v1', 'APPROVED', now());`);
+
+  // Opponents named in the wireframe that are not in the demo competitions get a team row of their own.
+  const extraTeams = new Map<string, string>();
+  const teamByName = (name: string): { id: string } => {
+    const t = w.teams.find((x) => x.name === name);
+    if (t) return t;
+    if (!extraTeams.has(name)) {
+      const id = demoId(2, 900 + extraTeams.size);
+      extraTeams.set(name, id);
+      out.push(`INSERT INTO teams(id, name) VALUES (${q(id)}, ${q(name)});`);
+    }
+    return { id: extraTeams.get(name)! };
+  };
 
   let cardSeq = 0;
   for (const p of w.players) {
     out.push(playerSql(p));
     if (p.reference) {
-      out.push(`INSERT INTO player_reference_values(player_id, run_id, amount_cents, confidence, explanations, is_historical) VALUES (${q(p.id)}, ${q(demoRun)}, ${p.reference.amount}, ${q(p.reference.confidence)}, ${q(JSON.stringify(p.reference.reasons))}, ${p.reference.isHistorical});`);
+      if (p.reference.previous !== null) {
+        out.push(`INSERT INTO player_reference_values(player_id, run_id, amount_cents, confidence, explanations, is_historical) VALUES (${q(p.id)}, ${q(prevRun)}, ${p.reference.previous}, ${q(p.reference.confidence)}, '[]', ${p.reference.isHistorical});`);
+      }
+      out.push(`INSERT INTO player_reference_values(player_id, run_id, amount_cents, confidence, explanations, is_historical, previous_cents) VALUES (${q(p.id)}, ${q(demoRun)}, ${p.reference.amount}, ${q(p.reference.confidence)}, ${q(JSON.stringify(p.reference.reasons))}, ${p.reference.isHistorical}, ${p.reference.previous ?? "NULL"});`);
+      // An external transfer value consistent with the demo model (S = €5 × √(M / €10M)), known a month ago.
+      const m = Math.round(1_000_000_000 * (p.reference.amount / 500) ** 2);
+      out.push(`INSERT INTO external_valuations(player_id, source, amount_cents, as_of, known_at) VALUES (${q(p.id)}, 'demo-transfer', ${m}, (now() - interval '30 days')::date, now() - interval '30 days');`);
+    }
+    // Recent matches as fixtures with versioned stats (missing values stay missing).
+    for (const [i, ml] of p.recentMatches.entries()) {
+      const [homeName, awayName] = ml.fixture.split(" – ");
+      const home = teamByName(homeName!);
+      const away = teamByName(awayName!);
+      const fx = `demo-${p.id}-${i}`;
+      const at = `(now() - interval '${Math.round((w.now.getTime() - ml.playedAt.getTime()) / 1000)} seconds')`;
+      out.push(`INSERT INTO fixtures(provider, external_id, competition_id, home_team_id, away_team_id, kickoff_at, status) VALUES ('fixture', ${q(fx)}, ${q(p.competitionId)}, ${q(home.id)}, ${q(away.id)}, ${at}, 'FINISHED') ON CONFLICT DO NOTHING;`);
+      const stats: Record<string, number> = {};
+      if (ml.goals !== null) stats.goals = ml.goals;
+      if (ml.assists !== null) stats.assists = ml.assists;
+      out.push(`INSERT INTO player_match_stats(player_id, fixture_id, version, minutes, stats, source_as_of) SELECT ${q(p.id)}, id, 1, ${ml.minutes ?? "NULL"}, ${q(JSON.stringify(stats))}, ${at} + interval '3 hours' FROM fixtures WHERE provider = 'fixture' AND external_id = ${q(fx)};`);
     }
     out.push(`INSERT INTO player_markets(player_id, status) VALUES (${q(p.id)}, ${q(p.marketStatus)});`);
     if (p.marketStatus !== "OPEN") continue;

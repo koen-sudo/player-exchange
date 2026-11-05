@@ -62,10 +62,12 @@ describe("public catalogue reads", () => {
     const p = (await getCatalogPlayer(t.db, noah.id))!;
     assert.equal(p.reference!.amountMinor, "600");
     assert.equal(p.reference!.isDemoModel, true);
-    await t.db.execute(sql`update valuation_runs set status = 'DRAFT', published_at = null`);
-    const hidden = (await getCatalogPlayer(t.db, noah.id))!;
-    assert.equal(hidden.reference, null);
-    await t.db.execute(sql`update valuation_runs set status = 'PUBLISHED', published_at = '2026-11-02T17:00:00Z'`);
+    // A newer draft with another value stays invisible.
+    const run = (await t.db.execute<{ id: string }>(sql`
+      insert into valuation_runs(model_version_id, scope, data_version, information_as_of, status)
+      select model_version_id, 'all', 'draft-test', now(), 'DRAFT' from valuation_runs limit 1 returning id`)).rows[0]!.id;
+    await t.db.execute(sql`insert into player_reference_values(player_id, run_id, amount_cents, confidence) values (${noah.id}, ${run}, 9999, 'LOW')`);
+    assert.equal((await getCatalogPlayer(t.db, noah.id))!.reference!.amountMinor, "600");
   });
 
   it("exposes no birth dates and no user data (privacy)", async () => {

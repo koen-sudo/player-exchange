@@ -3,18 +3,18 @@
  *
  * From PostgreSQL: competitions, teams, players (status, admission, team,
  * role, published reference), supply per player, order book levels, last
- * trade (when there is one), drops and the user's subscriptions, and the signed-in user's
+ * trade (when there is one), published reference history (change column,
+ * reasons), recent matches, drops and the user's subscriptions, and the signed-in user's
  * card holdings, reservations and orders, and cash balances from the ledger.
  *
  * From the demo world until their phase moves them to the database:
- * the last trade before the first real one (R-46), match lines and
- * the previous reference value used for the change column (fase 7).
+ * the last trade before the first real one (R-46).
  * Overlay data is joined by player id, which the seed keeps identical.
  */
 import "server-only";
 import { cache } from "react";
 import { cents, seasonKeyFor } from "@px/domain";
-import { balancesFor, getDb, holdingsFor, lastTrades, listDropsForUser, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
+import { balancesFor, getDb, holdingsFor, lastTrades, listDropsForUser, publishedReferenceHistory, recentMatches, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
 import { demoWorld, type DemoSubscription, type DemoWorld, type Drop, type Player, type Role } from "@px/demo";
 
 const ROLES = new Set<Role>(["GOALKEEPER", "CENTRE_BACK", "FULL_BACK", "DEFENSIVE_MIDFIELDER", "CENTRAL_MIDFIELDER", "WINGER", "STRIKER"]);
@@ -24,6 +24,7 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
   const { db } = getDb();
   const season = seasonKeyFor(new Date());
   const [rows, supply, levels, trades, dropRows] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season), orderBookLevels(db), lastTrades(db), listDropsForUser(db, userId)]);
+  const [history, matches] = await Promise.all([publishedReferenceHistory(db), recentMatches(db)]);
   const DROP_STATUS: Record<string, Drop["status"]> = { PUBLISHED: "PUBLISHED", OPEN: "OPEN", CLOSED: "CLOSED", ALLOCATING: "CLOSED", SETTLING: "CLOSED", COMPLETED: "COMPLETED", CANCELLED: "CANCELLED", POSTPONED: "CANCELLED" };
   const drops: Drop[] = dropRows.map((d) => ({
     id: d.id,
@@ -75,15 +76,16 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
     const o = overlayById.get(r.id);
     const s = supply.get(r.id);
     const marketStatus = r.market_status as Player["marketStatus"];
+    const h = history.get(r.id);
     const reference = r.amount_cents === null ? null : {
       amount: cents(Number(r.amount_cents)),
-      previous: o?.reference?.previous ?? null,
+      previous: h?.previous === null || h?.previous === undefined ? null : cents(h.previous),
       publishedAt: new Date(r.published_at!),
-      informationAsOf: o?.reference?.informationAsOf ?? new Date(r.published_at!),
+      informationAsOf: h ? new Date(h.informationAsOf) : new Date(r.published_at!),
       modelVersion: r.model_version!,
       isDemoModel: true as const,
-      confidence: o?.reference?.confidence ?? "LOW",
-      reasons: o?.reference?.reasons ?? [],
+      confidence: (h?.confidence ?? "LOW") as "HIGH" | "MEDIUM" | "LOW",
+      reasons: h?.explanations ?? [],
       isHistorical: !!r.is_historical,
     };
     const name = r.display_name;
@@ -121,7 +123,7 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
         seasonMaximum: 500,
         nextDropAt: nextDrop.get(r.id) ?? null,
       },
-      recentMatches: o?.recentMatches ?? [],
+      recentMatches: matches.get(r.id) ?? [],
       isFictional: true,
     };
   });

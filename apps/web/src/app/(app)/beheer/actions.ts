@@ -12,6 +12,8 @@ import { DomainError } from "@px/domain";
 import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTION_TYPES_LIST } from "@px/db";
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
+import { createValuationRun, publishValuationRun, reviewValuationRun } from "@px/db";
+import { loadConfig } from "@px/integrations/env";
 import { applyDropPriceChange, approveBreakResolution, demoShiftSchedule, proposeBreakResolution, proposeDrop, publishDrop, requestDropPriceChange, runReconciliation } from "@px/db";
 import { euroInputToMinor } from "@/lib/format";
 import {
@@ -248,5 +250,32 @@ export async function demoDropScheduleAction(formData: FormData) {
     const action = str(formData, "action") === "CLOSE_NOW" ? "CLOSE_NOW" : "OPEN_NOW";
     await demoShiftSchedule(payments(), user, { dropId: str(formData, "dropId"), action });
     return action === "OPEN_NOW" ? "Demo: inschrijving geopend." : "Demo: inschrijving gesloten; de trekking en afwikkeling zijn uitgevoerd.";
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Valuation (fase 7)
+// ---------------------------------------------------------------------------
+export async function createValuationRunAction() {
+  await guarded("/beheer/waardering", async (user) => {
+    const r = await createValuationRun(getDb().db, user);
+    return r.status === "VALIDATED"
+      ? `Conceptrun berekend: ${r.values} waardes, ${r.noValue} spelers zonder nieuwe waarde. Een tweede persoon moet hem beoordelen.`
+      : "De conceptrun is niet door de automatische controles gekomen; zie de fouten.";
+  });
+}
+
+export async function reviewValuationRunAction(formData: FormData) {
+  await guarded("/beheer/waardering", async (user) => {
+    const decision = str(formData, "decision") === "APPROVE" ? "APPROVE" : "REJECT";
+    await reviewValuationRun(getDb().db, user, { runId: str(formData, "runId"), decision, reason: str(formData, "reason") });
+    return decision === "APPROVE" ? "Run goedgekeurd. Hij wordt maandag om 18.00 gepubliceerd." : "Run afgewezen; hij wordt nooit gepubliceerd.";
+  });
+}
+
+export async function publishValuationRunAction(formData: FormData) {
+  await guarded("/beheer/waardering", async (user) => {
+    const ok = await publishValuationRun(getDb().db, user, loadConfig(process.env).mode, { runId: str(formData, "runId"), now: str(formData, "now") === "1" });
+    return ok ? "Run gepubliceerd. De nieuwe referentiewaardes zijn zichtbaar; bestaande orders zijn niet gewijzigd." : "Nog niet het geplande moment; de run wordt maandag om 18.00 gepubliceerd.";
   });
 }

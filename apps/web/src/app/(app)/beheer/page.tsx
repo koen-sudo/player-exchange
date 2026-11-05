@@ -16,7 +16,7 @@ const MODULES: [string, string, string, string | null][] = [
   ["Betalingsafwijkingen en reconciliatie", "Pending operaties, grootboek en aansluiting met de betaalpartner", "finance.operate", "/beheer/betalingen"],
   ["Orders en uitvoeringen", "Uitvoeringen, afwikkeling en handelsinvarianten", "trading.view", "/beheer/handel"],
   ["Uitgifteplanning en toewijzingen", "Drops, prijswijzigingen, trekkingen en wachtlijsten", "issuance.prepare", "/beheer/uitgiftes"],
-  ["Waarderingsruns", "Concept, review en publicatie", "fase 7", null],
+  ["Waarderingsruns", "Concept, controle, beoordeling en publicatie", "valuation.prepare", "/beheer/waardering"],
 ];
 
 const GATES = ["Juridisch", "Contracten", "Betalen", "Data", "Beeld", "Spelersidentiteit", "Waardering", "Techniek", "Security", "Operations"];

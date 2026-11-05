@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, dropsCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
+import { claimNextRun, dropsCycle, valuationCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -23,14 +23,14 @@ export type JobDefinition = {
 };
 
 const notYet = (fase: number) => async () => {
-  throw new Error(`job body is implemented in fase ${fase}`);
+  throw new Error(`job body follows with a real supplier (fase ${fase})`);
 };
 
 export const JOBS: JobDefinition[] = [
   { name: "catalog.sync", schedule: "continu: ingeplande en onderbroken imports (database als wachtrij)", fase: 2, run: async () => undefined },
-  { name: "fixtures.sync", schedule: "periodiek en na wedstrijdupdates", fase: 2, run: notYet(2) },
-  { name: "external-valuations.check", schedule: "dagelijks", fase: 7, run: notYet(7) },
-  { name: "valuation.weekly-run", schedule: "maandag 18.00 Europe/Amsterdam, na controle", fase: 7, run: notYet(7) },
+  { name: "fixtures.sync", schedule: "periodiek en na wedstrijdupdates (wacht op dataleverancier, O-03; demo-wedstrijden uit de seed)", fase: 2, run: notYet(8) },
+  { name: "external-valuations.check", schedule: "dagelijks (wacht op dataleverancier, O-03; demo-waardes uit de seed)", fase: 7, run: notYet(8) },
+  { name: "valuation.weekly-run", schedule: "maandag vanaf 12.00 conceptrun; publicatie maandag 18.00 Europe/Amsterdam, alleen na goedkeuring", fase: 7, run: async () => undefined },
   { name: "drops.open-close", schedule: "elke 5 s: openen en sluiten op de vastgelegde UTC-tijdstippen, toewijzen, afwikkelen, wachtlijst", fase: 6, run: async () => undefined },
   { name: "orders.expire", schedule: "elke 5 s: vrije restanten van verlopen orders sluiten", fase: 5, run: async () => undefined },
   { name: "trading.match", schedule: "elke 5 s: markten met een kruisend orderboek en geen open afwikkeling", fase: 5, run: async () => undefined },
@@ -116,6 +116,8 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
       const ctx = paymentsContext(db, cfg);
       const r = await paymentsOnce(ctx, `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
       if (r.delivered || r.finalised) console.log(JSON.stringify({ level: "info", msg: "payments cycle", ...r }));
+      const vr = await valuationCycle(db, cfg.mode);
+      if (vr.created || vr.published) console.log(JSON.stringify({ level: "info", msg: "valuation cycle", ...vr }));
       const dr = await dropsCycle(ctx);
       if (dr.opened || dr.allocated) console.log(JSON.stringify({ level: "info", msg: "drops cycle", ...dr }));
       const tr = await tradingOnce(ctx);
