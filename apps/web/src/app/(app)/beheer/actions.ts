@@ -11,6 +11,8 @@ import { redirect } from "next/navigation";
 import { DomainError } from "@px/domain";
 import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTION_TYPES_LIST } from "@px/db";
 import { currentUser } from "@/server/session";
+import { payments } from "@/server/payments";
+import { approveBreakResolution, proposeBreakResolution, runReconciliation } from "@px/db";
 import {
   createDraftProgramme,
   decideApproval,
@@ -158,5 +160,30 @@ export async function resolveIssue(formData: FormData) {
     const resolution = choice === "IGNORE" ? { kind: "IGNORE" as const } : choice === "CREATE_NEW" ? { kind: "CREATE_NEW" as const } : { kind: "LINK" as const, playerId: choice };
     await resolveImportIssue(getDb().db, user, { issueId: str(formData, "issueId"), resolution, reason: str(formData, "reason") });
     return "Importprobleem afgehandeld en vastgelegd in de auditlog.";
+  });
+}
+
+export async function reconcileNow() {
+  await guarded("/beheer/betalingen", async (user) => {
+    if (!user.permissions.has("finance.reconcile")) throw new DomainError("ACTION_NOT_ALLOWED");
+    const ctx = payments();
+    const r = await runReconciliation(getDb().db, ctx.provider, ctx.providerName, { scope: "payments:manual" });
+    return r.outcome === "MATCHED"
+      ? "Reconciliatie afgerond: platform en betaalpartner sluiten aan."
+      : `Reconciliatie afgerond: ${r.findings} verschil(len), waarvan ${r.opened} nieuw.`;
+  });
+}
+
+export async function proposeResolution(formData: FormData) {
+  await guarded("/beheer/betalingen", async (user) => {
+    await proposeBreakResolution(getDb().db, user, { breakId: str(formData, "breakId"), note: str(formData, "note") });
+    return "Voorstel vastgelegd. Een tweede bevoegde persoon moet het goedkeuren (bij een materieel verschil).";
+  });
+}
+
+export async function approveResolution(formData: FormData) {
+  await guarded("/beheer/betalingen", async (user) => {
+    await approveBreakResolution(getDb().db, user, { breakId: str(formData, "breakId"), reason: str(formData, "reason") });
+    return "Verschil afgehandeld en vastgelegd in de auditlog.";
   });
 }

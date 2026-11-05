@@ -124,6 +124,10 @@ export function seedSql(): string {
     entry(`opening:${userId}:demo-seed`, "OPENING_BALANCE", [[acct("PSP_SETTLEMENT_ASSET", null), "DEBIT", opening], [acct("CUSTOMER_AVAILABLE", userId), "CREDIT", opening]]);
     // The simulated provider holds the same money, so reconciliation agrees from the start.
     out.push(`INSERT INTO psp_sim.operations(idempotency_key, reference, kind, account_ref, amount_cents, status, scenario, resolved_at) VALUES (${q(`opening-${userId}`)}, ${q(`sim-opening-${userId.slice(-6)}`)}, 'DEPOSIT', ${q(`user:${userId}`)}, ${opening}, 'SUCCEEDED', 'OPENING_BALANCE', now());`);
+    // ...and the platform records it as a confirmed (opening) deposit linked to that operation.
+    const ref = `sim-opening-${userId.slice(-6)}`;
+    out.push(`INSERT INTO settlement_operations(type, idempotency_key, provider, provider_reference, amount_cents, status, financially_processed_at, outcome_known_at, user_id, created_at) VALUES ('DEPOSIT', ${q(`opening-${userId}`)}, 'demo', ${q(ref)}, ${opening}, 'SUCCEEDED', '2026-10-01T09:00:00Z', '2026-10-01T09:00:00Z', ${q(userId)}, '2026-10-01T09:00:00Z');`);
+    out.push(`INSERT INTO deposits(user_id, amount_cents, provider, provider_reference, status, created_at, confirmed_at, operation_id) VALUES (${q(userId)}, ${opening}, 'demo', ${q(ref)}, 'CONFIRMED', '2026-10-01T09:00:00Z', '2026-10-01T09:00:00Z', (SELECT id FROM settlement_operations WHERE idempotency_key = ${q(`opening-${userId}`)}));`);
     for (const h of holds) {
       const holdId = `c${h.order.id.slice(1)}`;
       out.push(`INSERT INTO cash_holds(id, user_id, purpose, order_id, requested_amount_cents, confirmed_amount_cents, status) VALUES (${q(holdId)}, ${q(userId)}, 'BUY_ORDER', ${q(h.order.id)}, ${h.amount}, ${h.amount}, 'ACTIVE');`);

@@ -27,6 +27,10 @@ export type AppConfig = {
   readonly databaseUrl: string;
   readonly redisUrl: string | undefined;
   readonly authSecret: string;
+  /** Shared secret to verify payment webhooks (per provider contract). */
+  readonly paymentWebhookSecret: string;
+  /** Where the web app is reachable for the worker (simulated webhooks in demo). */
+  readonly webBaseUrl: string;
 };
 
 export class ConfigError extends Error {
@@ -62,10 +66,13 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     databaseUrl: env.DATABASE_URL ?? "",
     redisUrl: env.REDIS_URL,
     authSecret: env.AUTH_SECRET ?? "",
+    paymentWebhookSecret: env.PAYMENT_WEBHOOK_SECRET ?? "",
+    webBaseUrl: env.WEB_BASE_URL ?? "http://localhost:3000",
   };
 
   if (!cfg.databaseUrl) problems.push("DATABASE_URL ontbreekt");
   if (!cfg.authSecret) problems.push("AUTH_SECRET ontbreekt");
+  if (!cfg.paymentWebhookSecret) problems.push("PAYMENT_WEBHOOK_SECRET ontbreekt");
   for (const [k, v] of Object.entries(cfg.adapters)) {
     if (!v) problems.push(`adapter ${k} is niet ingesteld`);
   }
@@ -82,6 +89,9 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     }
     if (cfg.authSecret === "change-me-in-local-env" || cfg.authSecret.length < 32) {
       problems.push("AUTH_SECRET is te zwak voor productie");
+    }
+    if (cfg.paymentWebhookSecret.startsWith("demo-") || cfg.paymentWebhookSecret.length < 32) {
+      problems.push("PAYMENT_WEBHOOK_SECRET is te zwak voor productie");
     }
   }
 

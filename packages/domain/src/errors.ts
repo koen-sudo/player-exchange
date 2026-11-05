@@ -24,6 +24,8 @@ export const ERROR_CODES = [
   "SELF_TRADE_REJECTED",
   "EDITION_CAP_EXCEEDED",
   "INVARIANT_VIOLATION",
+  "AMOUNT_INVALID",
+  "PAYMENT_ACCOUNT_MISSING",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -49,6 +51,8 @@ export const USER_MESSAGES_NL: Record<ErrorCode, string> = {
   SELF_TRADE_REJECTED: "Deze order zou met je eigen order handelen en is afgewezen.",
   EDITION_CAP_EXCEEDED: "Het seizoensmaximum voor deze speler is bereikt.",
   INVARIANT_VIOLATION: "Er ging iets mis bij de verwerking. Probeer het later opnieuw.",
+  AMOUNT_INVALID: "Kies een geldig bedrag.",
+  PAYMENT_ACCOUNT_MISSING: "Er is nog geen bevestigde betaalrekening voor uitbetalingen.",
 };
 
 export class DomainError extends Error {

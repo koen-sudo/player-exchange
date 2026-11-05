@@ -3,18 +3,18 @@
  *
  * From PostgreSQL: competitions, teams, players (status, admission, team,
  * role, published reference), supply per player, and the signed-in user's
- * card holdings, reservations and orders.
+ * card holdings, reservations and orders, and cash balances from the ledger.
  *
  * From the demo world until their phase moves them to the database:
- * order book levels and last trade (fase 5), cash balances (fase 4),
- * transactions (fase 4/5), drops and subscriptions (fase 6), match lines and
+ * order book levels and last trade (fase 5),
+ * trade transactions (fase 5), drops and subscriptions (fase 6), match lines and
  * the previous reference value used for the change column (fase 7).
  * Overlay data is joined by player id, which the seed keeps identical.
  */
 import "server-only";
 import { cache } from "react";
 import { cents, seasonKeyFor } from "@px/domain";
-import { getDb, holdingsFor, listAllPlayersInternal, ordersForUser, supplyFor } from "@px/db";
+import { balancesFor, getDb, holdingsFor, listAllPlayersInternal, ordersForUser, supplyFor } from "@px/db";
 import { demoWorld, type DemoWorld, type Player, type Role } from "@px/demo";
 
 const ROLES = new Set<Role>(["GOALKEEPER", "CENTRE_BACK", "FULL_BACK", "DEFENSIVE_MIDFIELDER", "CENTRAL_MIDFIELDER", "WINGER", "STRIKER"]);
@@ -85,8 +85,11 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
 
   let holdings: DemoWorld["holdings"] = {};
   let orders: DemoWorld["orders"] = [];
+  let balances: DemoWorld["balances"] = {};
   if (userId) {
-    const [h, os] = await Promise.all([holdingsFor(db, userId), ordersForUser(db, userId)]);
+    const [h, os, b] = await Promise.all([holdingsFor(db, userId), ordersForUser(db, userId), balancesFor(db, userId)]);
+    // Cash comes from the ledger (fase 4).
+    balances = { [userId]: { available: cents(b.available), reserved: cents(b.reserved), pendingIncoming: cents(b.pendingIncoming) } };
     holdings = {
       [userId]: h.map((c) => ({
         cardId: c.card_id,
@@ -119,5 +122,6 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
     players,
     holdings,
     orders,
+    balances,
   };
 });

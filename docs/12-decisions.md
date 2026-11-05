@@ -34,6 +34,7 @@ _Bron: bouwdossier V1.0 hoofdstuk 12 en addendum V1.1. Nieuwe routinekeuzes van 
 | A-11 | Initialen als standaardbeeld | UI (fase 1) |
 | A-12 | TypeScript/PostgreSQL-stack | `docs/adr/0001-stack.md` |
 | A-13 | pnpm workspaces met Turborepo, één lockfile; db-migraties, seeds en externe mutaties nooit uit cache | `turbo.json` (`cache: false` voor die taken) |
+| A-14 | Storten €5–€2.500 per keer, maximaal 3 onafgeronde stortingen tegelijk; opnemen €1–€5.000 en nooit meer dan beschikbaar | `packages/domain/src/payments.ts` (`DEFAULT_PAYMENT_LIMITS`); definitief vast te stellen met de betaalpartner (O-02) |
 
 Deze aannames zijn geen reden om de ontwikkeling te pauzeren. Ze zijn configureerbaar en getest uitgewerkt.
 
@@ -97,6 +98,13 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-35 | Quarantaine: een identiteitsconflict wordt gekoppeld aan een kandidaat of als nieuw profiel aangemaakt; andere problemen kunnen worden genegeerd. Altijd met reden en audit. | BR-01. |
 | R-36 | Schermen lezen in fase 3 spelers, status, referentie, voorraad, kaartbezit, reserveringen en eigen orders uit PostgreSQL. Orderboek, laatste transactie, saldo, transacties en uitgiftes blijven tot hun fase uit de demowereld (vervangt R-28). | Eén bron per gegeven; zichtbaar in `apps/web/src/server/world.ts`. |
 | R-37 | Een domeinfout kan een specifieke Nederlandse melding meegeven (`details.userMessage`); beheer toont die, de API houdt de generieke foutcode en melding. | Beheerders moeten zien waarom iets wordt geweigerd. |
+| R-38 | Grootboek, betaalstromen, reconciliatie en simulator volgens ADR 0005. Saldo op alle schermen komt vanaf fase 4 uit het grootboek (vervangt het saldo-deel van R-36). | docs/04, docs/07, docs/09. |
+| R-39 | Een webhook is alleen een melding: na controle van de handtekening en opslag in de inbox vraagt het platform de status op bij de betaalpartner (fetch-on-notify). | Maakt dubbele, late en omgekeerde berichten onschadelijk (AT-10, AT-22). |
+| R-40 | Een betaalmethode met vertraagde zekerheid boekt eerst op ‘Nog niet beschikbaar’; pas de definitieve bevestiging maakt het besteedbaar. Een mislukking daarna boekt het terug. | docs/07 Deposits. |
+| R-41 | Een materieel reconciliatieverschil blokkeert opnames (van die gebruiker, of van iedereen als niemand aan te wijzen is) en sluit alleen met voorstel + goedkeuring door een tweede persoon. Een waarschuwing blokkeert niets en sluit vanzelf. | docs/06 `RECONCILIATION_HOLD`, docs/10 "niet alleen wegklikken". |
+| R-42 | Een betaalpagina die niemand afrondt, verloopt na een uur bij de betaalpartner; de storting wordt dan ‘mislukt (verlopen)’ zonder boeking. | Voorkomt dat onafgeronde stortingen de limiet van A-14 blijvend vullen. |
+| R-43 | Nieuwe foutcodes `AMOUNT_INVALID` en `PAYMENT_ACCOUNT_MISSING`. | Aanvulling op de foutcatalogus (docs/06). |
+| R-44 | Demo-openingssaldi zijn vastgelegd als bevestigde storting met een operatie bij de betaalsimulator, zodat de reconciliatie vanaf de start aansluit. | Seed. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 

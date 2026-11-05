@@ -6,7 +6,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { USER_MESSAGES_NL, type ErrorCode } from "@px/domain";
+import { DomainError, USER_MESSAGES_NL, type ErrorCode } from "@px/domain";
 
 const STATUS: Partial<Record<ErrorCode, number>> = {
   AUTH_REQUIRED: 401,
@@ -18,11 +18,22 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   PREVIEW_EXPIRED: 409,
   PAYMENT_PENDING: 409,
   RECONCILIATION_HOLD: 423,
+  INSUFFICIENT_AVAILABLE_FUNDS: 422,
+  AMOUNT_INVALID: 422,
 };
 
 export function apiError(code: ErrorCode, requestId = randomUUID(), logDetail?: unknown) {
   if (logDetail !== undefined) console.warn(JSON.stringify({ requestId, code, detail: logDetail }));
   return NextResponse.json({ requestId, code, message: USER_MESSAGES_NL[code] }, { status: STATUS[code] ?? 422 });
+}
+
+/** Map a thrown error to the API catalogue; unknown errors never leak details. */
+export function apiFromError(e: unknown, requestId = randomUUID()) {
+  if (e instanceof DomainError) {
+    return NextResponse.json({ requestId, code: e.code, message: e.userMessage }, { status: STATUS[e.code] ?? 422 });
+  }
+  console.error(JSON.stringify({ requestId, level: "error", error: String(e) }));
+  return NextResponse.json({ requestId, code: "INTERNAL", message: "Er ging iets mis. Er is niets gewijzigd." }, { status: 500 });
 }
 
 export function apiOk<T>(data: T, requestId = randomUUID()) {

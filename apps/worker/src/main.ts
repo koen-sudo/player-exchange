@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, getDb, runCatalogImport, type Db } from "@px/db";
+import { claimNextRun, getDb, paymentsContext, pollOpenOperations, runCatalogImport, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -33,8 +33,10 @@ export const JOBS: JobDefinition[] = [
   { name: "valuation.weekly-run", schedule: "maandag 18.00 Europe/Amsterdam, na controle", fase: 7, run: notYet(7) },
   { name: "drops.open-close", schedule: "op vastgelegde UTC-tijdstippen", fase: 6, run: notYet(6) },
   { name: "orders.expire", schedule: "periodiek", fase: 5, run: notYet(5) },
+  { name: "payments.poll", schedule: "elke 5 s: open stortingen/opnames opvragen of opnieuw indienen, wachtende webhooks koppelen", fase: 4, run: async () => undefined },
+  { name: "payments.simulator-webhooks", schedule: "alleen demo: elke 5 s de webhooks van de betaalsimulator afleveren", fase: 4, run: async () => undefined },
   { name: "settlement.poll", schedule: "volgens status en providerlimieten", fase: 5, run: notYet(5) },
-  { name: "reconciliation.daily", schedule: "minimaal dagelijks", fase: 4, run: notYet(4) },
+  { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna", fase: 4, run: async () => undefined },
   { name: "notifications.outbox", schedule: "continu via outbox", fase: 6, run: notYet(6) },
 ];
 
@@ -61,6 +63,22 @@ export async function catalogSyncOnce(db: Db, provider: FootballDataProvider): P
   return runId;
 }
 
+/**
+ * One payments cycle. In demo the simulator's webhooks are delivered over
+ * HTTP to the web app, exactly like an external provider would.
+ */
+export async function paymentsOnce(ctx: PaymentsCtx & { simulator: ReturnType<typeof paymentsContext>["simulator"] }, webhookUrl: string): Promise<{ delivered: number; checked: number; finalised: number }> {
+  let delivered = 0;
+  if (ctx.simulator) {
+    delivered = await ctx.simulator.deliverDue(async (headers, rawBody) => {
+      const res = await fetch(webhookUrl, { method: "POST", headers, body: rawBody });
+      if (res.status >= 300 && res.status !== 202) throw new Error(`webhook ${res.status}`);
+    });
+  }
+  const polled = await pollOpenOperations(ctx);
+  return { delivered, ...polled };
+}
+
 export function startWorker(env: Readonly<Record<string, string | undefined>> = process.env, opts: { pollMs?: number; db?: Db } = {}) {
   const cfg = loadConfig(env); // throws on invalid/unsafe configuration (AT-35)
   let stopping = false;
@@ -78,6 +96,36 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
       busy = false;
     }
   }, pollMs);
+  // Payments: webhook delivery (demo), polling and reconciliation.
+  let paying = false;
+  const payments = opts.pollMs === 0 ? null : setInterval(async () => {
+    if (stopping || paying) return;
+    paying = true;
+    try {
+      const db = opts.db ?? getDb(cfg.databaseUrl).db;
+      const r = await paymentsOnce(paymentsContext(db, cfg), `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
+      if (r.delivered || r.finalised) console.log(JSON.stringify({ level: "info", msg: "payments cycle", ...r }));
+    } catch (e) {
+      console.error(JSON.stringify({ level: "error", msg: "payments cycle failed", error: (e as Error).message }));
+    } finally {
+      paying = false;
+    }
+  }, pollMs);
+  let reconciling = false;
+  const reconcile = opts.pollMs === 0 ? null : setInterval(async () => {
+    if (stopping || reconciling) return;
+    reconciling = true;
+    try {
+      const db = opts.db ?? getDb(cfg.databaseUrl).db;
+      const ctx = paymentsContext(db, cfg);
+      const r = await runReconciliation(db, ctx.provider, ctx.providerName);
+      console.log(JSON.stringify({ level: r.outcome === "MATCHED" ? "info" : "warn", msg: "reconciliation", ...r }));
+    } catch (e) {
+      console.error(JSON.stringify({ level: "error", msg: "reconciliation failed", error: (e as Error).message }));
+    } finally {
+      reconciling = false;
+    }
+  }, 10 * 60_000);
   const heartbeat = setInterval(() => {
     if (!stopping) console.log(JSON.stringify({ level: "info", msg: "worker heartbeat", mode: cfg.mode, jobs: JOBS.length, at: new Date().toISOString() }));
   }, 30_000);
@@ -85,10 +133,18 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
     stopping = true;
     clearInterval(heartbeat);
     if (poll) clearInterval(poll);
+    if (payments) clearInterval(payments);
+    if (reconcile) clearInterval(reconcile);
     console.log(JSON.stringify({ level: "info", msg: "worker stopping", signal }));
   };
-  process.once("SIGTERM", () => stop("SIGTERM"));
-  process.once("SIGINT", () => stop("SIGINT"));
+  // On a signal: stop scheduling, then close the database pool so the process exits.
+  const shutdown = (signal: string) => {
+    stop(signal);
+    const handle = opts.db ? null : getDb(cfg.databaseUrl);
+    void (handle ? handle.close() : Promise.resolve()).finally(() => process.exit(0));
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
   console.log(JSON.stringify({ level: "info", msg: "worker started", mode: cfg.mode, jobs: JOBS.map((j) => `${j.name} (fase ${j.fase})`) }));
   return { stop: () => stop("manual"), config: cfg };
 }

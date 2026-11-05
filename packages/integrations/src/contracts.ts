@@ -51,7 +51,12 @@ export function blockedFlows(report: CapabilityReport<PaymentCapability>): { flo
 // ---------------------------------------------------------------------------
 export type ProviderOutcome =
   | { readonly status: "SUCCEEDED"; readonly providerReference: string }
-  | { readonly status: "PENDING"; readonly providerReference: string }
+  /**
+   * PENDING: not final. `stage` tells whether the customer still has to act
+   * (AWAITING_CUSTOMER: no money moved yet) or the provider is processing
+   * money that may still fail (PROCESSING: may be shown as pending incoming).
+   */
+  | { readonly status: "PENDING"; readonly providerReference: string; readonly stage?: "AWAITING_CUSTOMER" | "PROCESSING" }
   | { readonly status: "FAILED"; readonly providerReference: string | null; readonly reason: string; readonly definitive: true }
   | { readonly status: "UNKNOWN"; readonly providerReference: string | null };
 
@@ -76,7 +81,18 @@ export interface PaymentProvider {
   queryStatus(input: { idempotencyKey: string }): Promise<ProviderOutcome>;
   /** Verifies a webhook per the provider contract. Browser cookies are never an authentication means. */
   verifyWebhook(input: { headers: Readonly<Record<string, string>>; rawBody: string }): { valid: boolean; eventId: string | null };
+  /** The provider's own record of operations, for reconciliation (capability RECONCILIATION_REPORT). */
+  reconciliationReport(input: { since: Date }): Promise<ProviderReportLine[]>;
 }
+
+export type ProviderReportLine = {
+  readonly idempotencyKey: string;
+  readonly providerReference: string;
+  readonly kind: "DEPOSIT" | "HOLD" | "RELEASE" | "SETTLE" | "PAYOUT";
+  readonly amount: Cents;
+  readonly status: "AWAITING_CUSTOMER" | "PENDING" | "SUCCEEDED" | "FAILED";
+  readonly createdAt: string;
+};
 
 // ---------------------------------------------------------------------------
 // Football data

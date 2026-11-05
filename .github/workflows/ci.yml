@@ -27,6 +27,8 @@ jobs:
       IDENTITY_PROVIDER: demo
       FOOTBALL_DATA_PROVIDER: fixture
       NOTIFICATION_PROVIDER: demo
+      PAYMENT_WEBHOOK_SECRET: demo-ci-webhook-secret
+      WEB_BASE_URL: http://localhost:3000
       PGHOST: localhost
       PGUSER: px
       PGPASSWORD: px

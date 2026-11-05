@@ -283,4 +283,32 @@ SELECT pg_temp.expect_error($$WITH e AS (INSERT INTO editions(player_id, season_
 SELECT pg_temp.expect_error($$UPDATE issuance_programs SET planned_total = 400, change_reason = 'te veel uitgegeven' WHERE edition_id = '30000000-0000-0000-0000-000000000001' AND status = 'PUBLISHED'$$,
   'published programme reduced below existing serial numbers');
 
+-- Fase 4: payments and reconciliation ---------------------------------------
+INSERT INTO cash_holds(id, user_id, purpose, order_id, requested_amount_cents, confirmed_amount_cents, status)
+  SELECT '70000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'BUY_ORDER', o.id, 1000, 1000, 'ACTIVE'
+    FROM orders o WHERE o.user_id = '00000000-0000-0000-0000-00000000000a' AND NOT EXISTS (SELECT 1 FROM cash_holds h WHERE h.order_id = o.id) LIMIT 1;
+SELECT pg_temp.expect_error($$UPDATE cash_holds SET consumed_amount_cents = 700, released_amount_cents = 400 WHERE id = '70000000-0000-0000-0000-000000000001'$$,
+  'hold consumed + released above the held amount');
+
+INSERT INTO payment_accounts(id, user_id, provider, provider_account_id, status) VALUES
+  ('71000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'demo', 'acct-anna-test', 'ACTIVE');
+SELECT pg_temp.expect_error($$INSERT INTO withdrawals(user_id, amount_cents, payment_account_id, status) VALUES ('00000000-0000-0000-0000-00000000000a', 500, '71000000-0000-0000-0000-000000000001', 'PAID')$$,
+  'paid withdrawal without completion time');
+SELECT pg_temp.expect_error($$INSERT INTO deposits(user_id, amount_cents, provider, status) VALUES ('00000000-0000-0000-0000-00000000000a', 500, 'demo', 'CONFIRMED')$$,
+  'confirmed deposit without confirmation time');
+SELECT pg_temp.expect_error($$INSERT INTO inbox_events(provider, external_event_id, payload, signature_valid) VALUES ('demo', 'evt-1', '{}', true), ('demo', 'evt-1', '{}', true)$$,
+  'the same webhook event stored twice (AT-10)');
+
+INSERT INTO reconciliation_runs(id, scope, as_of, outcome) VALUES ('72000000-0000-0000-0000-000000000001', 'test', now(), 'BREAKS_FOUND');
+INSERT INTO reconciliation_breaks(id, run_id, difference_cents, severity, fingerprint) VALUES
+  ('73000000-0000-0000-0000-000000000001', '72000000-0000-0000-0000-000000000001', 500, 'MATERIAL', 'test:break');
+SELECT pg_temp.expect_error($$INSERT INTO reconciliation_breaks(run_id, difference_cents, severity, fingerprint) VALUES ('72000000-0000-0000-0000-000000000001', 500, 'MATERIAL', 'test:break')$$,
+  'the same open break twice');
+SELECT pg_temp.expect_error($$UPDATE reconciliation_breaks SET status = 'RESOLVED', resolution_note = 'weg', resolved_by = '00000000-0000-0000-0000-00000000000c' WHERE id = '73000000-0000-0000-0000-000000000001'$$,
+  'material break closed by one person');
+SELECT pg_temp.expect_error($$UPDATE reconciliation_breaks SET status = 'RESOLVED', resolution_note = 'weg', resolved_by = '00000000-0000-0000-0000-00000000000c', approved_by = '00000000-0000-0000-0000-00000000000c' WHERE id = '73000000-0000-0000-0000-000000000001'$$,
+  'material break approved by the same person');
+UPDATE reconciliation_breaks SET status = 'RESOLVED', resolution_note = 'verklaard', resolved_by = '00000000-0000-0000-0000-00000000000c', approved_by = '00000000-0000-0000-0000-00000000000d' WHERE id = '73000000-0000-0000-0000-000000000001';
+SELECT pg_temp.expect((SELECT status FROM reconciliation_breaks WHERE id = '73000000-0000-0000-0000-000000000001') = 'RESOLVED', 'material break closed by two people is accepted');
+
 \echo 'All database constraint tests passed.'

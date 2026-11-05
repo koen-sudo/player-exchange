@@ -12,6 +12,7 @@ const demoEnv = {
   IDENTITY_PROVIDER: "demo",
   FOOTBALL_DATA_PROVIDER: "fixture",
   NOTIFICATION_PROVIDER: "demo",
+  PAYMENT_WEBHOOK_SECRET: "demo-webhook-secret-change-me",
 };
 
 describe("mode guard (AT-35)", () => {
@@ -40,6 +41,13 @@ describe("mode guard (AT-35)", () => {
 
   it("demo login stays off when disabled, even in demo", () => {
     assert.equal(isDemoLoginAllowed(loadConfig({ ...demoEnv, DEMO_LOGIN_ENABLED: "false" })), false);
+  });
+
+  it("production refuses the demo webhook secret", () => {
+    assert.throws(
+      () => loadConfig({ ...demoEnv, APP_MODE: "production", DEMO_LOGIN_ENABLED: "false", AUTH_SECRET: "x".repeat(40), PAYMENT_PROVIDER: "acme", IDENTITY_PROVIDER: "acme", FOOTBALL_DATA_PROVIDER: "acme", NOTIFICATION_PROVIDER: "acme" }),
+      (e: unknown) => e instanceof ConfigError && e.problems.some((p) => p.includes("PAYMENT_WEBHOOK_SECRET")),
+    );
   });
 
   it("unknown mode is refused", () => {

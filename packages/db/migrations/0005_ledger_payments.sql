@@ -60,8 +60,13 @@ ALTER TABLE reconciliation_breaks
   ADD COLUMN kind text NOT NULL DEFAULT 'AMOUNT' CHECK (kind IN ('AMOUNT','STATUS','MISSING_IN_LEDGER','MISSING_AT_PROVIDER','PROJECTION')),
   ADD COLUMN user_id uuid REFERENCES users(id),
   ADD COLUMN operation_id uuid REFERENCES settlement_operations(id),
-  ADD COLUMN detail jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- What the break is about (e.g. "op:<id>:status"); a rerun does not open the same break twice.
+  ADD COLUMN fingerprint text NOT NULL DEFAULT gen_random_uuid()::text,
+  ADD COLUMN resolved_at timestamptz;
 CREATE INDEX reconciliation_breaks_open_idx ON reconciliation_breaks(user_id) WHERE status <> 'RESOLVED';
+CREATE UNIQUE INDEX reconciliation_breaks_one_open ON reconciliation_breaks(fingerprint) WHERE status <> 'RESOLVED';
+ALTER TABLE reconciliation_runs ADD COLUMN finished_at timestamptz, ADD COLUMN summary jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- Projection check: each account balance equals the sum of its journal lines.
 CREATE VIEW ledger_projection_mismatches AS
