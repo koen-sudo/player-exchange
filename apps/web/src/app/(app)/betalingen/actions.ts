@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { DomainError, parseEuroInput } from "@px/domain";
 import { depositByReference, getDb, SIM_SCENARIOS, requestWithdrawal, startDeposit, type SimScenario } from "@px/db";
 import { loadConfig } from "@px/integrations/env";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { depositReturnUrl, payments } from "@/server/payments";
 
@@ -30,6 +31,7 @@ export async function depositAction(formData: FormData) {
   if (!user) redirect("/login");
   let target: string;
   try {
+    await guardSensitive("deposit.start", user.id);
     const amount = parseEuroInput(String(formData.get("amount") ?? ""));
     const r = await startDeposit(payments(), { userId: user.id, amount, requestKey: key(formData), returnUrl: depositReturnUrl });
     target = r.redirectUrl ?? back({ storting: r.depositId });
@@ -44,6 +46,7 @@ export async function withdrawAction(formData: FormData) {
   if (!user) redirect("/login");
   let target: string;
   try {
+    await guardSensitive("withdrawal.request", user.id);
     const amount = parseEuroInput(String(formData.get("amount") ?? ""));
     // Demo only: the tester picks how the simulated provider answers.
     const raw = String(formData.get("demoOutcome") ?? "SUCCESS");

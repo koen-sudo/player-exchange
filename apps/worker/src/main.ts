@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, dropsCycle, syncAlerts, valuationCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
+import { applyRetention, assertProductionGates, claimNextRun, dropsCycle, unmetGates, syncAlerts, valuationCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -38,7 +38,7 @@ export const JOBS: JobDefinition[] = [
   { name: "payments.simulator-webhooks", schedule: "alleen demo: elke 5 s de webhooks van de betaalsimulator afleveren", fase: 4, run: async () => undefined },
   { name: "settlement.poll", schedule: "elke 5 s, samen met payments.poll (dezelfde operatietabel)", fase: 5, run: async () => undefined },
   { name: "monitoring.alerts", schedule: "elke minuut: signalen evalueren, meldingen openen en sluiten", fase: 8, run: async () => undefined },
-  { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna", fase: 4, run: async () => undefined },
+  { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna; past daarna de bewaartermijnen toe (ruwe importpagina's, rate-limitvensters)", fase: 4, run: async () => undefined },
   { name: "notifications.outbox", schedule: "in-app direct uit de outbox; e-mail en push volgen met een notificatieprovider", fase: 6, run: async () => undefined },
 ];
 
@@ -114,6 +114,14 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
     paying = true;
     try {
       const db = opts.db ?? getDb(cfg.databaseUrl).db;
+      // A gate withdrawn while running stops all money work at once (docs/10).
+      if (cfg.mode === "production") {
+        const unmet = await unmetGates(db);
+        if (unmet.length) {
+          console.error(JSON.stringify({ level: "critical", msg: "production gates open: money jobs paused", unmet }));
+          return;
+        }
+      }
       const ctx = paymentsContext(db, cfg);
       const r = await paymentsOnce(ctx, `${cfg.webBaseUrl}/api/v1/webhooks/payments/demo`);
       if (r.delivered || r.finalised) console.log(JSON.stringify({ level: "info", msg: "payments cycle", ...r }));
@@ -138,6 +146,8 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
       const ctx = paymentsContext(db, cfg);
       const r = await runReconciliation(db, ctx.provider, ctx.providerName);
       console.log(JSON.stringify({ level: r.outcome === "MATCHED" ? "info" : "warn", msg: "reconciliation", ...r }));
+      const kept = await applyRetention(db);
+      if (kept.importSnapshots) console.log(JSON.stringify({ level: "info", msg: "retention", ...kept }));
     } catch (e) {
       console.error(JSON.stringify({ level: "error", msg: "reconciliation failed", error: (e as Error).message }));
     } finally {
@@ -188,6 +198,9 @@ function isMainModule(): boolean {
 
 if (isMainModule()) {
   try {
+    const cfg = loadConfig(process.env);
+    // Production refuses to start while a production gate is open (docs/10).
+    if (cfg.mode === "production") await assertProductionGates(getDb(cfg.databaseUrl).db, cfg.mode);
     startWorker();
   } catch (e) {
     console.error((e as Error).message);

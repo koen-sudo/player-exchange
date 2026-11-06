@@ -99,23 +99,23 @@ describe("ledger corrections (four-eyes)", () => {
     const before = await balancesFor(t.db, ANNA);
     const approvalId = await requestLedgerCorrection(t.db, finance, { userId: ANNA, amountCents: 250, direction: "CREDIT", breakId: null, reason: "Dubbel afgeschreven servicekosten" });
     const payload = { userId: ANNA, amountCents: 250, direction: "CREDIT" as const, breakId: null };
-    await assert.rejects(executeLedgerCorrection(t.db, finance, { approvalId, payload }), isCode("ACTION_NOT_ALLOWED"));
+    await assert.rejects(executeLedgerCorrection(t.db, finance, "demo", { approvalId, payload }), isCode("ACTION_NOT_ALLOWED"));
     await assert.rejects(decideApproval(t.db, finance, { approvalId, decision: "APPROVE", reason: "zelf" }), isCode("ACTION_NOT_ALLOWED"));
     await decideApproval(t.db, approver, { approvalId, decision: "APPROVE", reason: "Afschrift gecontroleerd" });
     assert.equal((await pendingCorrections(t.db)).length, 1);
-    await executeLedgerCorrection(t.db, finance, { approvalId, payload });
-    await assert.rejects(executeLedgerCorrection(t.db, finance, { approvalId, payload }), isCode("ACTION_NOT_ALLOWED"));
+    await executeLedgerCorrection(t.db, finance, "demo", { approvalId, payload });
+    await assert.rejects(executeLedgerCorrection(t.db, finance, "demo", { approvalId, payload }), isCode("ACTION_NOT_ALLOWED"));
     assert.equal((await balancesFor(t.db, ANNA)).available, before.available + 250);
     assert.equal((await pendingCorrections(t.db)).length, 0);
 
     // Taking money back can never make a balance negative.
     const big = await requestLedgerCorrection(t.db, finance, { userId: ANNA, amountCents: 1_000_000, direction: "DEBIT", breakId: null, reason: "Test te grote terugboeking" });
     await decideApproval(t.db, approver, { approvalId: big, decision: "APPROVE", reason: "Testgoedkeuring" });
-    await assert.rejects(executeLedgerCorrection(t.db, finance, { approvalId: big, payload: { userId: ANNA, amountCents: 1_000_000, direction: "DEBIT", breakId: null } }), isCode("INSUFFICIENT_AVAILABLE_FUNDS"));
+    await assert.rejects(executeLedgerCorrection(t.db, finance, "demo", { approvalId: big, payload: { userId: ANNA, amountCents: 1_000_000, direction: "DEBIT", breakId: null } }), isCode("INSUFFICIENT_AVAILABLE_FUNDS"));
     // Executing with other content than was approved is refused and voids the approval (AT-34).
     const other = await requestLedgerCorrection(t.db, finance, { userId: ANNA, amountCents: 100, direction: "CREDIT", breakId: null, reason: "Kleine correctie" });
     await decideApproval(t.db, approver, { approvalId: other, decision: "APPROVE", reason: "Akkoord" });
-    await assert.rejects(executeLedgerCorrection(t.db, finance, { approvalId: other, payload: { userId: ANNA, amountCents: 2_500, direction: "CREDIT", breakId: null } }), isCode("ACTION_NOT_ALLOWED"));
+    await assert.rejects(executeLedgerCorrection(t.db, finance, "demo", { approvalId: other, payload: { userId: ANNA, amountCents: 2_500, direction: "CREDIT", breakId: null } }), isCode("ACTION_NOT_ALLOWED"));
     assert.equal((await balancesFor(t.db, ANNA)).available, before.available + 250);
     assert.deepEqual(await ledgerInvariants(t.db), { unbalancedEntries: 0, projectionMismatches: 0, negativeCustomerBalances: 0, reservedNotMatchingHolds: 0 });
   });

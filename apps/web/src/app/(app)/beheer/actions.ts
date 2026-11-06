@@ -13,7 +13,7 @@ import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTIO
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
 import { createValuationRun, publishValuationRun, reviewValuationRun } from "@px/db";
-import { acknowledgeAlert, executeLedgerCorrection, requestLedgerCorrection, runContractTests, type CorrectionPayload } from "@px/db";
+import { acknowledgeAlert, executeGateFulfilment, requestGateFulfilment, revokeGate, type GatePayload, executeLedgerCorrection, requestLedgerCorrection, runContractTests, type CorrectionPayload } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 import { loadConfig } from "@px/integrations/env";
 import { applyDropPriceChange, approveBreakResolution, demoShiftSchedule, proposeBreakResolution, proposeDrop, publishDrop, requestDropPriceChange, runReconciliation } from "@px/db";
@@ -317,7 +317,32 @@ export async function requestCorrectionAction(formData: FormData) {
 export async function executeCorrectionAction(formData: FormData) {
   await guarded("/beheer/betalingen", async (user) => {
     const payload = JSON.parse(str(formData, "payload")) as CorrectionPayload;
-    await executeLedgerCorrection(getDb().db, user, { approvalId: str(formData, "approvalId"), payload });
+    await executeLedgerCorrection(getDb().db, user, loadConfig(process.env).mode, { approvalId: str(formData, "approvalId"), payload });
     return "Correctie geboekt en vastgelegd in de auditlog.";
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Production gates (fase 9)
+// ---------------------------------------------------------------------------
+export async function requestGateAction(formData: FormData) {
+  await guarded("/beheer/koppelingen", async (user) => {
+    await requestGateFulfilment(getDb().db, user, loadConfig(process.env).mode, { gate: str(formData, "gate"), evidenceRef: str(formData, "evidenceRef"), reason: str(formData, "reason") });
+    return "Vervulling aangevraagd. Een tweede persoon moet het bewijs beoordelen.";
+  });
+}
+
+export async function executeGateAction(formData: FormData) {
+  await guarded("/beheer/koppelingen", async (user) => {
+    const payload = JSON.parse(str(formData, "payload")) as GatePayload;
+    await executeGateFulfilment(getDb().db, user, loadConfig(process.env).mode, { approvalId: str(formData, "approvalId"), payload });
+    return "Gate vervuld en vastgelegd in de auditlog.";
+  });
+}
+
+export async function revokeGateAction(formData: FormData) {
+  await guarded("/beheer/koppelingen", async (user) => {
+    await revokeGate(getDb().db, user, { gate: str(formData, "gate"), reason: str(formData, "reason") });
+    return "Gate ingetrokken. Productie start niet meer tot hij opnieuw is vervuld.";
   });
 }

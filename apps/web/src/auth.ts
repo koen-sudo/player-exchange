@@ -11,6 +11,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { ensureUserForSubject, findUserIdByAuthSubject, getDb, recordLogin } from "@px/db";
 import { isDemoLoginAllowed, loadConfig } from "@px/integrations/env";
+import { usedSecondFactor } from "@px/domain";
 
 const cfg = loadConfig(process.env);
 
@@ -57,6 +58,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // First OIDC login creates the user; the token keeps only our user id.
         const name = typeof profile.name === "string" ? profile.name : null;
         token.uid = await ensureUserForSubject(getDb().db, `${process.env.OIDC_ISSUER}|${profile.sub}`, name);
+        // docs/10: administrators use MFA via the identity provider. We only
+        // read the provider's statement (RFC 8176 "amr"); no own MFA protocol.
+        token.mfa = usedSecondFactor(profile.amr);
       } else if (user?.id) {
         token.uid = user.id;
       }
@@ -64,6 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (session.user && typeof token.uid === "string") (session.user as { id?: string }).id = token.uid;
+      if (session.user) (session.user as { mfa?: boolean }).mfa = token.mfa === true;
       return session;
     },
   },

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { placeOrder } from "@px/db";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { apiError, apiFromError, apiOk, idempotencyKey, sameOrigin } from "@/server/api";
 import { payments } from "@/server/payments";
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
   const key = idempotencyKey(req);
   if (!key) return apiError("ACTION_NOT_ALLOWED", requestId, "missing Idempotency-Key");
   try {
+    await guardSensitive("order.place", user.id);
     const body = (await req.json().catch(() => ({}))) as { previewId?: unknown };
     const r = await placeOrder(payments(), user.id, { previewId: String(body.previewId ?? ""), requestKey: key });
     return apiOk(r, requestId);

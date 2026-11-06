@@ -19,3 +19,6 @@ export * from "./drops.ts";
 export * from "./notifications.ts";
 export * from "./valuation.ts";
 export * from "./operations.ts";
+export * from "./rate-limit.ts";
+export * from "./data-export.ts";
+export * from "./retention.ts";

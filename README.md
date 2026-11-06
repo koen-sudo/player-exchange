@@ -2,7 +2,7 @@
 
 Marktplaats voor digitale voetballerskaarten met echte aankoop- en verkoopprijzen. Gebruikers ontdekken spelers, kopen kaarten bij uitgiftes, volgen hun ontwikkeling en verkopen kaarten aan andere gebruikers. Player Exchange publiceert een eigen referentiewaarde in euro's en ontvangt 5% verkoperscommissie op secundaire verkopen.
 
-> **Status: demo, fase 0 tot en met 7 opgeleverd, fase 8 zonder echte leveranciers.** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
+> **Status: demo, fase 0 tot en met 9 opgeleverd (fase 8 zonder echte leveranciers).** Fictieve spelers en testgeld. Geen live service, geen echte betalingen. Productie is geblokkeerd tot alle productiegates zijn vervuld (`docs/10-operations.md`). Zie `docs/STATUS.md` voor wat wel en niet werkt.
 
 ## Snel starten (lokale demo)
 
@@ -35,6 +35,8 @@ Inloggen in de demo gaat via **Inloggen** met een van de fictieve testaccounts:
 | Databaseconstraints (vereist PostgreSQL en `psql`) | `pnpm test:db` |
 | Typecheck en build | `pnpm typecheck && pnpm build` |
 | End-to-end (Playwright; `pnpm dev` of web + worker moeten draaien) | `pnpm test:e2e` |
+| Hersteloefening (dump, terugzetten, vergelijken) | `pnpm ops:restore-check` |
+| Belastingtest (10.000 spelers, 100 gelijktijdige orders) | `pnpm perf:load` |
 
 ## Uitvoeringsmodi
 
@@ -56,7 +58,7 @@ De server controleert de configuratie bij het starten (`packages/integrations/sr
 | `packages/db` | SQL-migraties, Drizzle-schema, catalogusimport, identiteit en autorisatie, goedkeuringen, voorraad en eigendom |
 | `packages/demo` | Fictieve demowereld, read models, seed en fixture-dataprovider |
 | `packages/integrations` | Leveranciersneutrale adaptercontracten en modusbewaking |
-| `docs/` | Dossier, besluiten, ADR's, status en wireframes |
+| `docs/` | Dossier, besluiten, ADR's, status, draaiboeken, securityreview, belastingtest, overdracht (`docs/13-handover.md`) en wireframes |
 
 ## Documentatie
 

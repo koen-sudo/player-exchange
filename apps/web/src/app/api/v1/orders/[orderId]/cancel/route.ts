@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { cancelOrder } from "@px/db";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { apiError, apiFromError, apiOk, sameOrigin } from "@/server/api";
 import { payments } from "@/server/payments";
@@ -13,6 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
   const user = await currentUser();
   if (!user) return apiError("AUTH_REQUIRED", requestId);
   try {
+    await guardSensitive("order.cancel", user.id);
     return apiOk(await cancelOrder(payments(), user.id, (await params).orderId), requestId);
   } catch (e) {
     return apiFromError(e, requestId);

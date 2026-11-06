@@ -1,6 +1,6 @@
 # Projectstatus
 
-Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd. Fase 8 is opgeleverd voor zover dat zonder gekozen leveranciers kan**; de echte sandboxkoppelingen wachten op O-02, O-03 en O-06. Volgende fase: 9 (hardening en cashpilotvoorbereiding). Niets in deze repository is productiegeschikt.
+Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd**, fase 8 zonder echte leveranciers (wacht op O-02, O-03, O-06). Er volgt geen bouwfase meer; wat nog nodig is voor een cashpilot staat onder "Voor een cashpilot". Niets in deze repository is productiegeschikt; de demo is niet cashklaar.
 
 ## Wat de producteigenaar nog moet doen
 
@@ -10,6 +10,48 @@ Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd
 | 2 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
 | 3 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
 | 4 | Een betaalpartner kiezen (O-02) | Acceptatie fase 8 met een echte sandbox; nu bewezen tegen de simulator |
+| 5 | Een hostingpartij kiezen (met point-in-time recovery) | Online demo, sandbox-omgeving, pentest |
+| 6 | Juridische en contractuele voorwaarden (O-01, O-07–O-10) | De gates en dus productie |
+
+## Fase 9 — Hardening en cashpilotvoorbereiding: opgeleverd (met open punten)
+
+| Oplevering | Status |
+|---|---|
+| Securityreview tegen docs/10 (`docs/security-review.md`): 4 hoge en 5 middelgrote bevindingen opgelost, geen kritieke | Klaar; onafhankelijke pentest volgt op een sandbox-omgeving |
+| Rate limiting op geld- en orderhandelingen, gedeeld via de database (R-65) | Klaar |
+| MFA voor beheerders via de identiteitsprovider (`amr`, R-67) | In code; aantonen met O-06 |
+| Productiegates afgedwongen: databasetrigger, opstartweigering web en worker, pauze binnen 30 s bij intrekken; vervullen/intrekken in Beheer → Koppelingen (R-68) | Klaar |
+| Beveiligingsheaders (CSP, HSTS, Permissions-Policy), webhooklimiet 64 KB | Klaar |
+| Deadlock in het grootboek onder gelijktijdigheid gevonden en opgelost (ADR 0007) | Klaar |
+| Belastingtest 10.000 spelers en 100 gelijktijdige orders (`docs/perf/2026-11-06.md`) | Klaar; marktscherm onder gelijktijdige belasting niet gehaald (R-69) |
+| Hersteloefening: dump → terugzetten → vergelijken → invarianten (`pnpm ops:restore-check`, ook in CI) | Klaar |
+| Scenario's A, B en C uit docs/09 als ketentests | Klaar (serverniveau, verificatie gesimuleerd tot O-06) |
+| Operationele oefeningen: afwikkeling blijft open, reconciliatieverschil | Klaar (geautomatiseerd) |
+| Uitbetaalrekening uit de eerste storting (R-66) | Klaar |
+| Bewaartermijn ruwe importdata uitgevoerd door de worker | Klaar |
+| Eigen gegevens downloaden (Account → Gegevensverzoeken) | Klaar; verwijderen via support |
+| Draaiboek back-up en herstel, overdrachtsdocument (`docs/13-handover.md`), ADR 0007 | Klaar |
+| Afhankelijkheden- en geheimenscan in CI (pnpm audit, gitleaks) | Gitleaks lokaal schoon; uitkomst pnpm audit: zie CI |
+
+### Acceptatie fase 9
+
+| Criterium | Bewijs |
+|---|---|
+| De volledige klantketen werkt | Scenario A: registreren → verifiëren → storten → inschrijven → levering → verkopen → tweede koper → afwikkeling → opnemen, met exacte bedragen. Scenario B en C ook. Daarna alle invarianten nul en reconciliatie sluitend. In de browser gedekt per stap (e2e fase 4–8); de verificatiestap is gesimuleerd zolang er geen identiteitsprovider is (O-06) |
+| De resterende externe voorwaarden zijn expliciet | "Voor een cashpilot" hieronder, `docs/13-handover.md`, gates in Beheer → Koppelingen |
+| Productie wordt alleen op basis van vervulde gates vrijgegeven | Integratietests: gate niet direct in de database te zetten, niet zonder tweede persoon, productie weigert te starten met een open gate; e2e: demo kan geen gate vervullen |
+
+## Voor een cashpilot
+
+| Wat | Wie / wanneer |
+|---|---|
+| Betaalpartner (O-02), dataleverancier (O-03), identiteitsprovider (O-06): adapter, contracttests in hun sandbox | Producteigenaar kiest; daarna bouw |
+| Juridisch (O-01), voorwaarden (O-07), fiscaal (O-08), merk/entiteit (O-09), spelersidentiteit (O-10) | Producteigenaar |
+| Hosting met point-in-time recovery; afgeschermde sandbox-omgeving | Producteigenaar kiest; daarna inrichting |
+| Marktscherm server-side pagineren (R-69) | Bouw |
+| CSP met nonces, "overal uitloggen", externe alerting op de bewakingssignalen | Bouw, na hostingkeuze en O-06 |
+| Onafhankelijke penetratietest | Na de sandbox-omgeving |
+| Alle tien gates vervullen met bewijs en een tweede persoon | Producteigenaar en eigenaren |
 
 ## Fase 8 — Externe integratiesandbox: deels opgeleverd (wacht op leverancierskeuzes)
 
@@ -60,11 +102,13 @@ Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd
 
 | Controle | Uitkomst |
 |---|---|
-| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **208 tests geslaagd** (fase 8: +6 contractsuites, bewaking, correcties) |
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **225 tests geslaagd** (fase 9: +17: rate limiting, gates, MFA-regel, deadlock-regressie, gegevensexport, bewaartermijn, scenario A/B/C, twee oefeningen) |
 | `pnpm test:db` | **Alle constraintcontroles geslaagd** (incl. fase 8: contracttestbewijs is niet te wijzigen; fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
 | `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces) |
-| `pnpm test:e2e` op verse database (web + worker) | **35 tests geslaagd** (fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
-| Schermen fase 4–8 | Bewaking, Koppelingen, Betalingen met correcties (fase 8); Betalingen, Transacties, Uitgiftes, Meldingen, spelerpagina en beheer (Betalingen, Handel, Uitgiftes, Waardering) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
+| `pnpm test:e2e` op verse database (web + worker) | **41 tests geslaagd** (fase 9: +6: beveiligingsheaders, CSRF, rate limiting, webhooklimiet, gates in de demo, gegevensdownload; fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
+| Hersteloefening op de demodatabase (`pnpm ops:restore-check`) | **Geslaagd**: 72 tabellen, 18.862 rijen, geen verschillen, invarianten nul, auditlog blijft beschermd |
+| Belastingtest (`pnpm perf:load`, `perf:http`) | Zie `docs/perf/2026-11-06.md` |
+| Schermen fase 4–9 | Koppelingen met gates en Account met gegevensdownload (fase 9); Bewaking, Koppelingen, Betalingen met correcties (fase 8); Betalingen, Transacties, Uitgiftes, Meldingen, spelerpagina en beheer (Betalingen, Handel, Uitgiftes, Waardering) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
 
 ## Fase 2 — Catalogus en authenticatie: opgeleverd (met één blokkade)
 
@@ -93,6 +137,8 @@ Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd
 
 ## Eerdere fasen
 
+- **Fase 8** — Adaptercontracten als code, capabilitybewijs, bewaking met eigenaren en draaiboeken, correctieboekingen met vier ogen.
+
 - **Fase 7** — Waardering: demomodel, conceptrun, beoordeling door een tweede persoon, publicatie op maandag 18.00.
 
 - **Fase 6** — Primaire uitgifte: vier-ogenpublicatie, prijswijziging tot opening, inschrijven met reservering, controleerbare trekking, wachtlijst, levering, meldingen.
@@ -110,8 +156,9 @@ Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd
 | Contractsuites tegen een echte dataleverancier | O-03 |
 | Contractsuites en capabilityrapport tegen een echte betaalpartner-sandbox | O-02 |
 | Contracttests identiteit en notificaties | O-06 en keuze notificatieprovider |
-| Externe alerting (telefoon/e-mail) op de bewakingssignalen | Fase 9 / keuze monitoringdienst |
-| Performance bij 10.000 catalogusspelers | Zoekindex staat er; meting in fase 9 |
+| Externe alerting (telefoon/e-mail) op de bewakingssignalen | Keuze monitoringdienst |
+| MFA met een echte identiteitsprovider | O-06 |
+| Onafhankelijke penetratietest | Na sandbox-omgeving |
 
 ## Bekende beperkingen van deze demo
 
@@ -124,6 +171,6 @@ Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd
 - De betaalpartner is een simulator in dezelfde database (schema `psp_sim`). Er gaat geen echt geld om en er wordt nergens om betaalgegevens gevraagd.
 - Alles is demo: fictieve spelers en clubs, demomodel `demo-v1`, testgeld, lokale testlogin, placeholder-voorwaarden.
 
-## Volgende fase: 9 — Hardening en cashpilotvoorbereiding
+## Volgende stap
 
-Securityreview, belastingtests (o.a. 10.000 catalogusspelers), restoretest van de database, operationele oefeningen met de draaiboeken, productiegates en overdrachtsdocumentatie. Een cashpilot blijft geblokkeerd tot O-02, O-03, O-06 en de juridische gates zijn vervuld.
+Geen nieuwe bouwfase: de volgende stap zijn de keuzes onder "Voor een cashpilot". Daarna: adapters voor de gekozen leveranciers, hosting en een afgeschermde sandbox-omgeving.

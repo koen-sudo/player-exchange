@@ -33,6 +33,7 @@ type OpRow = {
   execution_id: string | null;
   allocation_id: string | null;
   idempotency_key: string;
+  provider?: string;
   provider_reference: string | null;
   amount_cents: string;
   status: string;
@@ -89,7 +90,7 @@ async function notify(tx: Executor, userId: string, template: string, dedupeKey:
 }
 
 const lockOp = async (tx: Executor, opId: string) =>
-  (await tx.execute<OpRow>(sql`SELECT id, type, execution_id, allocation_id, idempotency_key, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
+  (await tx.execute<OpRow>(sql`SELECT id, type, execution_id, allocation_id, idempotency_key, provider, provider_reference, amount_cents, status::text, user_id, financially_processed_at, created_at FROM settlement_operations WHERE id = ${opId} FOR UPDATE`)).rows[0];
 
 // ---------------------------------------------------------------------------
 // Applying a provider outcome (the only place that books deposit/withdrawal money)
@@ -123,6 +124,13 @@ export async function applyOperationOutcome(tx: Executor, mode: AppMode, opId: s
       case "SUCCEEDED":
         await book(tx, mode, "payments", postings.depositConfirmed(op.user_id, dep.id, amount, dep.status === "PENDING"));
         await tx.execute(sql`UPDATE deposits SET status = 'CONFIRMED', confirmed_at = now() WHERE id = ${dep.id}`);
+        // Closed loop (R-66): payouts go to the account the first confirmed
+        // deposit came from, as the provider knows it. No account numbers here.
+        await tx.execute(sql`
+          INSERT INTO payment_accounts(user_id, provider, provider_account_id, status, display_ref)
+          SELECT ${op.user_id}, ${op.provider!}, ${`user:${op.user_id}`}, 'ACTIVE', 'Rekening van je eerste storting'
+           WHERE NOT EXISTS (SELECT 1 FROM payment_accounts WHERE user_id = ${op.user_id} AND provider = ${op.provider!})
+          ON CONFLICT (provider, provider_account_id) DO NOTHING`);
         await finalise("SUCCEEDED", null);
         await notify(tx, op.user_id, "DEPOSIT_CONFIRMED", `deposit:${dep.id}:final`, { depositId: dep.id, amountCents: amount });
         return "FINALISED";

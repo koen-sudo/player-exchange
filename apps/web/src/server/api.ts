@@ -23,6 +23,7 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   MARKET_NOT_OPEN: 409,
   CARD_UNAVAILABLE: 409,
   SELF_TRADE_REJECTED: 409,
+  RATE_LIMITED: 429,
 };
 
 export function apiError(code: ErrorCode, requestId = randomUUID(), logDetail?: unknown) {

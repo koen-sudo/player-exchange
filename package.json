@@ -16,7 +16,10 @@
     "test:e2e": "pnpm --filter @px/web test:e2e",
     "db:migrate": "bash scripts/migrate.sh",
     "db:seed": "node packages/demo/src/seed-sql.ts | psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q",
-    "check:env": "node packages/integrations/src/env-check.ts"
+    "check:env": "node packages/integrations/src/env-check.ts",
+    "ops:restore-check": "node packages/db/ops/restore-check.ts",
+    "perf:load": "node packages/db/perf/load.ts",
+    "perf:http": "node packages/db/perf/http.ts"
   },
   "devDependencies": {
     "@types/node": "^22",

@@ -12,6 +12,7 @@ Per bewakingssignaal (beheer → Bewaking) één draaiboek. Elke melding heeft e
 | Webhookverificatiefouten | Financiën | [webhook-afgewezen.md](webhook-afgewezen.md) |
 | Uitbetalingsproblemen | Financiën | [uitbetaling-probleem.md](uitbetaling-probleem.md) |
 | Incident (algemeen) | Dienstdoende eigenaar | [incident.md](incident.md) |
+| Back-up en herstel (oefening en noodherstel) | Techniek | [back-up-en-herstel.md](back-up-en-herstel.md) |
 
 Algemene regels:
 

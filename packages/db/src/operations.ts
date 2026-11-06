@@ -21,6 +21,7 @@ import { tradingInvariants } from "./trading.ts";
 import { issuanceInvariants } from "./drops.ts";
 
 type Actor = Pick<Identity, "id" | "permissions">;
+type Mode = "demo" | "sandbox" | "production";
 
 // ---------------------------------------------------------------------------
 // Contract tests as evidence
@@ -180,11 +181,11 @@ export async function requestLedgerCorrection(db: Db, actor: Actor, input: Corre
  * entry is keyed on it). CREDIT gives the customer money from the platform's
  * loss account; DEBIT takes it back and cannot make the balance negative.
  */
-export async function executeLedgerCorrection(db: Db, actor: Actor, input: { approvalId: string; payload: CorrectionPayload }): Promise<void> {
+export async function executeLedgerCorrection(db: Db, actor: Actor, mode: Mode, input: { approvalId: string; payload: CorrectionPayload }): Promise<void> {
   requirePermission(actor, "finance.correct");
   await db.transaction(async (tx) => {
     await consumeApproval(tx, actor.id, input.approvalId, "LEDGER_CORRECTION", input.payload);
-    await book(tx, "demo", "operations", postings.correction(input.payload.userId, input.approvalId, input.payload.amountCents, input.payload.direction));
+    await book(tx, mode, "operations", postings.correction(input.payload.userId, input.approvalId, input.payload.amountCents, input.payload.direction));
     if (input.payload.breakId) {
       await tx.execute(sql`UPDATE reconciliation_breaks SET detail = detail || ${JSON.stringify({ correctionApprovalId: input.approvalId })}::jsonb WHERE id = ${input.payload.breakId}`);
     }
@@ -210,5 +211,75 @@ export async function correctionTargets(db: Executor) {
 
 /** Production gates with their state (evidence and approval are required by the database). */
 export async function listGates(db: Executor) {
-  return (await db.execute<{ key: string; satisfied: boolean; evidence_ref: string | null }>(sql`SELECT key, satisfied, evidence_ref FROM feature_gates ORDER BY key`)).rows;
+  return (await db.execute<{ key: string; description: string; satisfied: boolean; evidence_ref: string | null; updated_at: string }>(sql`
+    SELECT key, description, satisfied, evidence_ref, updated_at FROM feature_gates ORDER BY key`)).rows;
+}
+
+export type GatePayload = { gate: string; evidenceRef: string };
+
+/**
+ * Request to record a production gate as fulfilled (docs/10 "Productiegates").
+ * The evidence is a reference to the document that proves it (a signed
+ * agreement, a legal opinion, a test report). A demo database never holds
+ * real evidence, so gates cannot be fulfilled there.
+ */
+export async function requestGateFulfilment(db: Db, actor: Actor, mode: Mode, input: GatePayload & { reason: string }): Promise<string> {
+  requirePermission(actor, "gates.manage");
+  if (mode === "demo") throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "In de demo worden geen productiegates vervuld." });
+  const evidenceRef = input.evidenceRef.trim();
+  if (evidenceRef.length < 5 || evidenceRef.length > 300) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Verwijs naar het bewijsstuk (5 tot 300 tekens)." });
+  const gate = (await db.execute<{ satisfied: boolean }>(sql`SELECT satisfied FROM feature_gates WHERE key = ${input.gate}`)).rows[0];
+  if (!gate) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Onbekende gate." });
+  if (gate.satisfied) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Deze gate is al vervuld." });
+  return requestApproval(db, actor, { action: "FULFIL_GATE", payload: { gate: input.gate, evidenceRef }, reason: input.reason });
+}
+
+/** Record the gate with exactly the approved evidence, once. The database re-checks the approval. */
+export async function executeGateFulfilment(db: Db, actor: Actor, mode: Mode, input: { approvalId: string; payload: GatePayload }): Promise<void> {
+  requirePermission(actor, "gates.manage");
+  if (mode === "demo") throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "In de demo worden geen productiegates vervuld." });
+  await db.transaction(async (tx) => {
+    await consumeApproval(tx, actor.id, input.approvalId, "FULFIL_GATE", input.payload);
+    const r = await tx.execute(sql`
+      UPDATE feature_gates SET satisfied = true, evidence_ref = ${input.payload.evidenceRef}, approval_id = ${input.approvalId}
+       WHERE key = ${input.payload.gate} AND NOT satisfied`);
+    if (!r.rowCount) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Deze gate is al vervuld." });
+    await writeAudit(tx, { actorId: actor.id, actorKind: "ADMIN", action: "GATE_FULFILLED", reason: `Gate vervuld met goedkeuring ${input.approvalId}`, entityType: "feature_gate", entityId: input.payload.gate, related: { ...input.payload } });
+  });
+}
+
+/** Withdrawing a gate is the safe direction: one person may do it, always audited. */
+export async function revokeGate(db: Db, actor: Actor, input: { gate: string; reason: string }): Promise<void> {
+  requirePermission(actor, "gates.manage");
+  const reason = input.reason.trim();
+  if (reason.length < 5) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Geef een reden van minimaal 5 tekens." });
+  await db.transaction(async (tx) => {
+    const r = await tx.execute(sql`UPDATE feature_gates SET satisfied = false, evidence_ref = NULL, approval_id = NULL WHERE key = ${input.gate} AND satisfied`);
+    if (!r.rowCount) throw new DomainError("ACTION_NOT_ALLOWED", { userMessage: "Deze gate is niet vervuld." });
+    await writeAudit(tx, { actorId: actor.id, actorKind: "ADMIN", action: "GATE_REVOKED", reason, entityType: "feature_gate", entityId: input.gate, related: { gate: input.gate } });
+  });
+}
+
+/** Gates that are not fulfilled. Production does not start while this is non-empty. */
+export async function unmetGates(db: Executor): Promise<string[]> {
+  return (await db.execute<{ key: string }>(sql`SELECT key FROM feature_gates WHERE NOT satisfied ORDER BY key`)).rows.map((r) => r.key);
+}
+
+/** Approved gate fulfilments waiting to be recorded. */
+export async function pendingGateFulfilments(db: Executor) {
+  return (await db.execute<{ id: string; payload: GatePayload; reason: string; requester: string | null; approver: string | null }>(sql`
+    SELECT a.id, a.payload, a.reason, ru.display_name AS requester, du.display_name AS approver
+      FROM admin_approvals a
+      LEFT JOIN user_profiles ru ON ru.user_id = a.requested_by LEFT JOIN user_profiles du ON du.user_id = a.approved_by
+     WHERE a.action_type = 'FULFIL_GATE' AND a.status = 'APPROVED' ORDER BY a.created_at`)).rows;
+}
+
+/**
+ * Startup check (docs/10 "De server controleert de vereiste gates"): a
+ * production process refuses to start while any gate is open.
+ */
+export async function assertProductionGates(db: Executor, mode: Mode): Promise<void> {
+  if (mode !== "production") return;
+  const unmet = await unmetGates(db);
+  if (unmet.length) throw new Error(`Productie geweigerd: open productiegates ${unmet.join(", ")}.`);
 }

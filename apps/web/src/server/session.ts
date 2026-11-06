@@ -8,6 +8,7 @@ import { cache } from "react";
 import { auth } from "@/auth";
 import { getDb, loadIdentity, type Identity } from "@px/db";
 import { loadConfig } from "@px/integrations/env";
+import { effectivePermissions } from "@px/domain";
 
 export type SessionUser = {
   id: string;
@@ -21,6 +22,8 @@ export type SessionUser = {
   tradeBlockReason: string | null;
   canSubscribe: boolean;
   subscribeBlockReason: string | null;
+  /** Set when admin roles are held but disabled because the login had no second factor. */
+  adminMfaRequired: boolean;
 };
 
 const reasonOf = (d: Identity["actions"][keyof Identity["actions"]]) => (d.allowed ? null : d.reason);
@@ -28,23 +31,27 @@ const reasonOf = (d: Identity["actions"][keyof Identity["actions"]]) => (d.allow
 /** Cached per request so a page and its components share one lookup. */
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
-  const id = (session?.user as { id?: string } | undefined)?.id;
+  const sessionUser = session?.user as { id?: string; mfa?: boolean } | undefined;
+  const id = sessionUser?.id;
   if (!id) return null;
   const { mode } = loadConfig(process.env);
   const identity = await loadIdentity(getDb().db, id, mode);
   if (!identity || identity.status === "CLOSED") return null;
+  // docs/10: outside the demo, admin permissions need a login with MFA.
+  const { permissions, mfaRequired: adminMfaRequired } = effectivePermissions(mode, identity.permissions, sessionUser?.mfa === true);
   return {
     id: identity.id,
     displayName: identity.displayName,
     verified: identity.verified,
     residenceCountry: identity.residenceCountry,
     roles: identity.roles,
-    permissions: identity.permissions,
+    permissions,
     actions: identity.actions,
     canTrade: identity.actions.TRADE.allowed,
     tradeBlockReason: reasonOf(identity.actions.TRADE),
     canSubscribe: identity.actions.SUBSCRIBE.allowed,
     subscribeBlockReason: reasonOf(identity.actions.SUBSCRIBE),
+    adminMfaRequired,
   };
 });
 

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { payments } from "@/server/payments";
 
 export const dynamic = "force-dynamic";
+const MAX_BODY = 64 * 1024;
 
 /**
  * Webhook endpoint of the demo payment simulator. Authenticated by the
@@ -12,7 +13,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   if (loadConfig(process.env).adapters.payment !== "demo") return new NextResponse(null, { status: 404 });
+  // Provider events are small; refuse anything large before reading it fully.
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) return NextResponse.json({ result: "TOO_LARGE" }, { status: 413 });
   const rawBody = await req.text();
+  if (Buffer.byteLength(rawBody) > MAX_BODY) return NextResponse.json({ result: "TOO_LARGE" }, { status: 413 });
   const headers: Record<string, string> = {};
   req.headers.forEach((v, k) => (headers[k.toLowerCase()] = v));
   try {

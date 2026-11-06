@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createOrderPreview, getDb } from "@px/db";
 import { loadConfig } from "@px/integrations/env";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { apiError, apiFromError, apiOk, sameOrigin } from "@/server/api";
 
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
   }
   if (!body || typeof body !== "object") return apiError("ACTION_NOT_ALLOWED", requestId);
   try {
+    await guardSensitive("order.preview", user.id);
     // The server determines the user from the session, never from the body.
     const preview = await createOrderPreview(getDb().db, loadConfig(process.env).mode, user.id, body as Record<string, unknown>);
     return apiOk(preview, requestId);

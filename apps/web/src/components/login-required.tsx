@@ -10,11 +10,11 @@ export function LoginRequired({ what }: { what: string }) {
   );
 }
 
-export function NotAllowed() {
+export function NotAllowed({ reason }: { reason?: string } = {}) {
   return (
     <div role="alert" className="mx-auto max-w-md rounded-xl border border-line bg-white p-8 text-center">
       <h1 className="text-xl font-semibold">Onvoldoende rechten</h1>
-      <p className="mt-2 text-muted">Je account heeft geen toegang tot deze pagina.</p>
+      <p className="mt-2 text-muted">{reason ?? "Je account heeft geen toegang tot deze pagina."}</p>
     </div>
   );
 }

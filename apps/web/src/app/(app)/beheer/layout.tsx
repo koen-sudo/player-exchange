@@ -6,6 +6,7 @@ import { LoginRequired, NotAllowed } from "@/components/login-required";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   if (!user) return <LoginRequired what="beheer" />;
+  if (user.adminMfaRequired) return <NotAllowed reason="Beheer vraagt een login met tweestapsverificatie (MFA). Log opnieuw in via de identiteitsprovider met je tweede factor." />;
   if (!hasAdminRole(user)) return <NotAllowed />;
   const links: [string, string, boolean][] = [
     ["/beheer", "Overzicht", true],

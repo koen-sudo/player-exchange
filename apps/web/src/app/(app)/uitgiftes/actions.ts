@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { DomainError } from "@px/domain";
 import { cancelSubscription, subscribe } from "@px/db";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
 
@@ -15,6 +16,7 @@ export async function subscribeAction(dropId: string, requestKey: string): Promi
   if (!user) return { ok: false, message: "Log in om in te schrijven." };
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(requestKey)) return { ok: false, message: "Vernieuw de pagina en probeer het opnieuw." };
   try {
+    await guardSensitive("drop.subscribe", user.id);
     const r = await subscribe(payments(), user.id, { dropId, requestKey });
     // No revalidation here: that would re-render the page under the open
     // dialog. The dialog refreshes the page when it is closed.

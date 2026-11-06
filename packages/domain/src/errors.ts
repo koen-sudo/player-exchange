@@ -26,6 +26,7 @@ export const ERROR_CODES = [
   "INVARIANT_VIOLATION",
   "AMOUNT_INVALID",
   "PAYMENT_ACCOUNT_MISSING",
+  "RATE_LIMITED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -53,6 +54,7 @@ export const USER_MESSAGES_NL: Record<ErrorCode, string> = {
   INVARIANT_VIOLATION: "Er ging iets mis bij de verwerking. Probeer het later opnieuw.",
   AMOUNT_INVALID: "Kies een geldig bedrag.",
   PAYMENT_ACCOUNT_MISSING: "Er is nog geen bevestigde betaalrekening voor uitbetalingen.",
+  RATE_LIMITED: "Te veel verzoeken achter elkaar. Wacht even en probeer het dan opnieuw.",
 };
 
 export class DomainError extends Error {

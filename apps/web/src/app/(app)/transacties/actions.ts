@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { DomainError } from "@px/domain";
 import { cancelOrder } from "@px/db";
+import { guardSensitive } from "@/server/guard";
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
 
@@ -13,6 +14,7 @@ export async function cancelOrderAction(formData: FormData) {
   if (!user) redirect("/login");
   let target: string;
   try {
+    await guardSensitive("order.cancel", user.id);
     const r = await cancelOrder(payments(), user.id, String(formData.get("orderId") ?? ""));
     target = `/transacties?melding=${encodeURIComponent(`${r.cancelled} ${r.cancelled === 1 ? "kaart" : "kaarten"} geannuleerd. Het vrijgekomen deel staat weer tot je beschikking.`)}`;
   } catch (e) {

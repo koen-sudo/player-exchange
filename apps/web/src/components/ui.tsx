@@ -53,7 +53,7 @@ const TONES: Record<Tone, string> = {
   red: "bg-danger-soft text-down",
 };
 export function Pill({ tone = "grey", children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}>{children}</span>;
+  return <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}>{children}</span>;
 }
 
 export function Stat({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {

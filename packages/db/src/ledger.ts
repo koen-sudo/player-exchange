@@ -62,6 +62,11 @@ export async function post(tx: Executor, input: { eventId: string; kind: string;
 
   const resolved = await Promise.all(lines.map(async (l) => ({ ...l, id: await accountId(tx, l.account.type, l.account.userId ?? null) })));
   resolved.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // Take the row locks up front, in id order. Without this, the foreign-key
+  // check of each journal line takes a shared lock that the balance trigger
+  // then upgrades, and two postings on the same (platform) account deadlock.
+  const ids = [...new Set(resolved.map((l) => l.id))];
+  await tx.execute(sql`SELECT id FROM ledger_accounts WHERE id IN (${sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `)}) ORDER BY id FOR UPDATE`);
   for (const l of resolved) {
     await tx.execute(sql`INSERT INTO journal_lines(journal_entry_id, ledger_account_id, side, amount_cents) VALUES (${entryId}, ${l.id}, ${l.side}, ${l.amount})`);
   }
