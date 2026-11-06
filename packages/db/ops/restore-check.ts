@@ -28,6 +28,9 @@ if (!source) {
   console.error("DATABASE_URL ontbreekt.");
   process.exit(2);
 }
+// pg_dump/pg_restore must have the server's major version (a newer client writes
+// settings an older server does not know). PG_BIN points at the right tools.
+const bin = (tool: string) => (process.env.PG_BIN ? join(process.env.PG_BIN, tool) : tool);
 const keepIdx = process.argv.indexOf("--keep-dump");
 const dir = mkdtempSync(join(tmpdir(), "px-restore-"));
 const dumpFile = keepIdx > 0 ? process.argv[keepIdx + 1]! : join(dir, "px.dump");
@@ -63,16 +66,19 @@ const src = createDb(source, { max: 2 });
 const admin = createDb(adminUrl.toString(), { max: 1 });
 let restored: ReturnType<typeof createDb> | null = null;
 try {
+  const serverMajor = Number((await src.db.execute<{ v: string }>(sql`SELECT current_setting('server_version_num') AS v`)).rows[0]!.v.slice(0, -4));
+  const clientMajor = Number(/(\d+)\./.exec(execFileSync(bin("pg_dump"), ["--version"]).toString())?.[1]);
+  if (serverMajor !== clientMajor) throw new Error(`pg_dump ${clientMajor} past niet bij server ${serverMajor}; zet PG_BIN op de tools van versie ${serverMajor}.`);
   const before = await fingerprint(src.db);
   const t0 = Date.now();
-  execFileSync("pg_dump", ["--format=custom", "--no-owner", "--file", dumpFile, source], { stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync(bin("pg_dump"), ["--format=custom", "--no-owner", "--file", dumpFile, source], { stdio: ["ignore", "ignore", "inherit"] });
   report.dump = { seconds: (Date.now() - t0) / 1000, bytes: statSync(dumpFile).size };
   const after = await fingerprint(src.db);
   if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error("De brondatabase veranderde tijdens de controle; draai de oefening opnieuw in een rustig moment of op een kopie.");
 
   const t1 = Date.now();
   await admin.db.execute(sql.raw(`CREATE DATABASE ${restoreName}`));
-  execFileSync("pg_restore", ["--no-owner", "--exit-on-error", "--dbname", target.toString(), dumpFile], { stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync(bin("pg_restore"), ["--no-owner", "--exit-on-error", "--dbname", target.toString(), dumpFile], { stdio: ["ignore", "ignore", "inherit"] });
   report.restore = { seconds: (Date.now() - t1) / 1000 };
   restored = createDb(target.toString(), { max: 2 });
   const copy = await fingerprint(restored.db);

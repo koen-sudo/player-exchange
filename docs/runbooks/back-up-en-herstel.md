@@ -12,10 +12,10 @@
 ## Hersteloefening (minimaal per kwartaal, en na elke schemawijziging die geld raakt)
 
 ```
-DATABASE_URL=postgres://…/kopie node packages/db/ops/restore-check.ts
+DATABASE_URL=postgres://…/kopie PG_BIN=/usr/lib/postgresql/16/bin node packages/db/ops/restore-check.ts
 ```
 
-Het script maakt een dump, zet die terug in een nieuwe database, en vergelijkt per tabel het aantal rijen, de saldi, de kaarteigenaren, de orderaantallen, de auditlog en de gepubliceerde referentiewaardes. Daarna draait het alle invarianten van geld, handel, voorraad en uitgifte op de herstelde database en controleert het dat de beschermende triggers werken (de auditlog weigert een verwijdering). Het resultaat is `GESLAAGD` of `MISLUKT`, met de verschillen. Draai het op een kopie of in een rustig moment: verandert de bron tijdens de dump, dan stopt het.
+Het script maakt een dump, zet die terug in een nieuwe database, en vergelijkt per tabel het aantal rijen, de saldi, de kaarteigenaren, de orderaantallen, de auditlog en de gepubliceerde referentiewaardes. Daarna draait het alle invarianten van geld, handel, voorraad en uitgifte op de herstelde database en controleert het dat de beschermende triggers werken (de auditlog weigert een verwijdering). Het resultaat is `GESLAAGD` of `MISLUKT`, met de verschillen. Draai het op een kopie of in een rustig moment: verandert de bron tijdens de dump, dan stopt het. `pg_dump` moet dezelfde hoofdversie hebben als de server (`PG_BIN`); het script controleert dat. Die eis vond de eerste CI-run: een nieuwere client schreef instellingen die PostgreSQL 16 niet kent.
 
 De oefening draait ook bij elke wijziging in CI, op de demo-database na de end-to-endtests.
 
