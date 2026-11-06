@@ -31,7 +31,7 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 | Bewaartermijn ruwe importdata uitgevoerd door de worker | Klaar |
 | Eigen gegevens downloaden (Account → Gegevensverzoeken) | Klaar; verwijderen via support |
 | Draaiboek back-up en herstel, overdrachtsdocument (`docs/13-handover.md`), ADR 0007 | Klaar |
-| Afhankelijkheden- en geheimenscan in CI (pnpm audit, gitleaks) | Gitleaks lokaal schoon; uitkomst pnpm audit: zie CI |
+| Afhankelijkheden- en geheimenscan in CI (pnpm audit, gitleaks) | CI 6 november: `pnpm audit --prod` geen bekende kwetsbaarheden; gitleaks over de hele geschiedenis: geen lekken |
 
 ### Acceptatie fase 9
 
@@ -104,6 +104,7 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 |---|---|
 | `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **225 tests geslaagd** (fase 9: +17: rate limiting, gates, MFA-regel, deadlock-regressie, gegevensexport, bewaartermijn, scenario A/B/C, twee oefeningen) |
 | `pnpm test:db` | **Alle constraintcontroles geslaagd** (incl. fase 8: contracttestbewijs is niet te wijzigen; fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
+| CI (GitHub Actions) | Alle stappen groen, inclusief hersteloefening na e2e en de securityjob |
 | `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces) |
 | `pnpm test:e2e` op verse database (web + worker) | **41 tests geslaagd** (fase 9: +6: beveiligingsheaders, CSRF, rate limiting, webhooklimiet, gates in de demo, gegevensdownload; fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
 | Hersteloefening op de demodatabase (`pnpm ops:restore-check`) | **Geslaagd**: 72 tabellen, 18.862 rijen, geen verschillen, invarianten nul, auditlog blijft beschermd |

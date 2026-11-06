@@ -10,7 +10,7 @@ Datum: 6 november 2026. Uitgevoerd door: de bouwer (Claude), op de code in deze 
 - Gericht gezocht naar bekende risico's: ruwe SQL, HTML-injectie, `eval`, geheimen in clientcode, ontbrekende eigendomscontroles, ongeauthenticeerde mutaties.
 - Gelijktijdigheid getest met een belastingtest (100 gelijktijdige orders op één markt).
 - Geheimenscan over de volledige git-geschiedenis met gitleaks 8.21.2: **geen lekken gevonden**.
-- Afhankelijkheden: `pnpm audit` kon in de bouwomgeving niet draaien (audit-endpoint niet bereikbaar). Draait vanaf nu in CI (job `security`); de uitkomst staat in `docs/STATUS.md`.
+- Afhankelijkheden: `pnpm audit --prod` in CI (job `security`, 6 november 2026): **geen bekende kwetsbaarheden**. Draait bij elke push.
 
 ## Bevindingen
 
@@ -46,5 +46,5 @@ Geen kritieke bevindingen. Alle hoge bevindingen zijn opgelost in code; F-02 moe
 | Logs zonder tokens, identiteitsdocumenten of volledige rekeningnummers | Ja: gestructureerde logs zonder request-body; rekeningen alleen gemaskeerd |
 | Afscherming en bewaartermijn raw datasets en exports | Ruwe importpagina's alleen voor beheer, verwijderd na termijn (F-08). Persoonlijke export alleen voor de persoon zelf, zonder gegevens van anderen |
 | Toegangscontrole op bestanden | Er worden nog geen bestanden opgeslagen; volgt met beeldrechten (gate Beeld) |
-| Dependency- en secret-scans | Gitleaks: schoon. `pnpm audit` in CI |
-| Back-ups en aantoonbare herstelprocedure | Hersteloefening geslaagd (script + CI); productieback-ups hangen af van de hostingkeuze |
+| Dependency- en secret-scans | Gitleaks: schoon. `pnpm audit --prod`: geen bekende kwetsbaarheden. Beide in CI |
+| Back-ups en aantoonbare herstelprocedure | Hersteloefening geslaagd lokaal en in CI; productieback-ups hangen af van de hostingkeuze |
