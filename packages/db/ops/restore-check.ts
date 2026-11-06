@@ -15,7 +15,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { sql } from "drizzle-orm";
 import { createDb, type Db } from "../src/client.ts";
 import { issuanceInvariants } from "../src/drops.ts";
@@ -30,10 +30,18 @@ if (!source) {
 }
 // pg_dump/pg_restore must have the server's major version (a newer client writes
 // settings an older server does not know). PG_BIN points at the right tools.
-const bin = (tool: string) => (process.env.PG_BIN ? join(process.env.PG_BIN, tool) : tool);
+// Either PG_BIN (a directory with the tools) or PG_DOCKER_IMAGE (e.g. postgres:16).
 const keepIdx = process.argv.indexOf("--keep-dump");
 const dir = mkdtempSync(join(tmpdir(), "px-restore-"));
 const dumpFile = keepIdx > 0 ? process.argv[keepIdx + 1]! : join(dir, "px.dump");
+function pgTool(tool: string, args: string[]): Buffer {
+  const image = process.env.PG_DOCKER_IMAGE;
+  if (image) {
+    const mount = dirname(dumpFile);
+    return execFileSync("docker", ["run", "--rm", "--network", "host", "-v", `${mount}:${mount}`, image, tool, ...args], { stdio: ["ignore", "pipe", "inherit"] });
+  }
+  return execFileSync(process.env.PG_BIN ? join(process.env.PG_BIN, tool) : tool, args, { stdio: ["ignore", "pipe", "inherit"] });
+}
 const target = new URL(source);
 const restoreName = `px_restore_${Date.now()}`;
 const adminUrl = new URL(source);
@@ -67,18 +75,18 @@ const admin = createDb(adminUrl.toString(), { max: 1 });
 let restored: ReturnType<typeof createDb> | null = null;
 try {
   const serverMajor = Number((await src.db.execute<{ v: string }>(sql`SELECT current_setting('server_version_num') AS v`)).rows[0]!.v.slice(0, -4));
-  const clientMajor = Number(/(\d+)\./.exec(execFileSync(bin("pg_dump"), ["--version"]).toString())?.[1]);
-  if (serverMajor !== clientMajor) throw new Error(`pg_dump ${clientMajor} past niet bij server ${serverMajor}; zet PG_BIN op de tools van versie ${serverMajor}.`);
+  const clientMajor = Number(/(\d+)\./.exec(pgTool("pg_dump", ["--version"]).toString())?.[1]);
+  if (serverMajor !== clientMajor) throw new Error(`pg_dump ${clientMajor} past niet bij server ${serverMajor}; zet PG_BIN op de tools van versie ${serverMajor}, of PG_DOCKER_IMAGE=postgres:${serverMajor}.`);
   const before = await fingerprint(src.db);
   const t0 = Date.now();
-  execFileSync(bin("pg_dump"), ["--format=custom", "--no-owner", "--file", dumpFile, source], { stdio: ["ignore", "ignore", "inherit"] });
+  pgTool("pg_dump", ["--format=custom", "--no-owner", "--file", dumpFile, source]);
   report.dump = { seconds: (Date.now() - t0) / 1000, bytes: statSync(dumpFile).size };
   const after = await fingerprint(src.db);
   if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error("De brondatabase veranderde tijdens de controle; draai de oefening opnieuw in een rustig moment of op een kopie.");
 
   const t1 = Date.now();
   await admin.db.execute(sql.raw(`CREATE DATABASE ${restoreName}`));
-  execFileSync(bin("pg_restore"), ["--no-owner", "--exit-on-error", "--dbname", target.toString(), dumpFile], { stdio: ["ignore", "ignore", "inherit"] });
+  pgTool("pg_restore", ["--no-owner", "--exit-on-error", "--dbname", target.toString(), dumpFile]);
   report.restore = { seconds: (Date.now() - t1) / 1000 };
   restored = createDb(target.toString(), { max: 2 });
   const copy = await fingerprint(restored.db);
