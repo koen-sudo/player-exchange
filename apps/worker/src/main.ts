@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type AppConfig } from "@px/integrations/env";
 import type { FootballDataProvider } from "@px/integrations";
-import { claimNextRun, dropsCycle, valuationCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
+import { claimNextRun, dropsCycle, syncAlerts, valuationCycle, expireOrders, getDb, marketsToMatch, paymentsContext, pollOpenOperations, runCatalogImport, runMarket, runReconciliation, type Db, type PaymentsCtx } from "@px/db";
 import { createFixtureProvider } from "@px/demo";
 
 export type JobDefinition = {
@@ -37,6 +37,7 @@ export const JOBS: JobDefinition[] = [
   { name: "payments.poll", schedule: "elke 5 s: open stortingen/opnames opvragen of opnieuw indienen, wachtende webhooks koppelen", fase: 4, run: async () => undefined },
   { name: "payments.simulator-webhooks", schedule: "alleen demo: elke 5 s de webhooks van de betaalsimulator afleveren", fase: 4, run: async () => undefined },
   { name: "settlement.poll", schedule: "elke 5 s, samen met payments.poll (dezelfde operatietabel)", fase: 5, run: async () => undefined },
+  { name: "monitoring.alerts", schedule: "elke minuut: signalen evalueren, meldingen openen en sluiten", fase: 8, run: async () => undefined },
   { name: "reconciliation.daily", schedule: "elke 10 min in demo, minimaal dagelijks daarna", fase: 4, run: async () => undefined },
   { name: "notifications.outbox", schedule: "in-app direct uit de outbox; e-mail en push volgen met een notificatieprovider", fase: 6, run: async () => undefined },
 ];
@@ -143,6 +144,16 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
       reconciling = false;
     }
   }, 10 * 60_000);
+  // Monitoring: one alert per unhealthy signal, resolved when healthy again (docs/10).
+  const alerts = opts.pollMs === 0 ? null : setInterval(async () => {
+    if (stopping) return;
+    try {
+      const r = await syncAlerts(opts.db ?? getDb(cfg.databaseUrl).db);
+      if (r.open) console.log(JSON.stringify({ level: "warn", msg: "monitoring", ...r }));
+    } catch (e) {
+      console.error(JSON.stringify({ level: "error", msg: "monitoring failed", error: (e as Error).message }));
+    }
+  }, 60_000);
   const heartbeat = setInterval(() => {
     if (!stopping) console.log(JSON.stringify({ level: "info", msg: "worker heartbeat", mode: cfg.mode, jobs: JOBS.length, at: new Date().toISOString() }));
   }, 30_000);
@@ -152,6 +163,7 @@ export function startWorker(env: Readonly<Record<string, string | undefined>> = 
     if (poll) clearInterval(poll);
     if (payments) clearInterval(payments);
     if (reconcile) clearInterval(reconcile);
+    if (alerts) clearInterval(alerts);
     console.log(JSON.stringify({ level: "info", msg: "worker stopping", signal }));
   };
   // On a signal: stop scheduling, then close the database pool so the process exits.

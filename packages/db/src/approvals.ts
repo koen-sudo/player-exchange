@@ -17,6 +17,7 @@ export const APPROVAL_ACTIONS = {
   PUBLISH_PROGRAMME: { requestPermission: "issuance.prepare", label: "Uitgifteprogramma publiceren" },
   PUBLISH_DROP: { requestPermission: "issuance.prepare", label: "Uitgifte (drop) publiceren" },
   CHANGE_DROP_PRICE: { requestPermission: "issuance.prepare", label: "Prijs van een gepubliceerde uitgifte wijzigen" },
+  LEDGER_CORRECTION: { requestPermission: "finance.correct", label: "Correctieboeking op een klantsaldo" },
 } as const;
 export type ApprovalAction = keyof typeof APPROVAL_ACTIONS;
 

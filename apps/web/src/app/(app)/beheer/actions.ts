@@ -13,6 +13,8 @@ import { addRestriction, endRestriction, getDb, requestCatalogImport, RESTRICTIO
 import { currentUser } from "@/server/session";
 import { payments } from "@/server/payments";
 import { createValuationRun, publishValuationRun, reviewValuationRun } from "@px/db";
+import { acknowledgeAlert, executeLedgerCorrection, requestLedgerCorrection, runContractTests, type CorrectionPayload } from "@px/db";
+import { createFixtureProvider } from "@px/demo";
 import { loadConfig } from "@px/integrations/env";
 import { applyDropPriceChange, approveBreakResolution, demoShiftSchedule, proposeBreakResolution, proposeDrop, publishDrop, requestDropPriceChange, runReconciliation } from "@px/db";
 import { euroInputToMinor } from "@/lib/format";
@@ -277,5 +279,45 @@ export async function publishValuationRunAction(formData: FormData) {
   await guarded("/beheer/waardering", async (user) => {
     const ok = await publishValuationRun(getDb().db, user, loadConfig(process.env).mode, { runId: str(formData, "runId"), now: str(formData, "now") === "1" });
     return ok ? "Run gepubliceerd. De nieuwe referentiewaardes zijn zichtbaar; bestaande orders zijn niet gewijzigd." : "Nog niet het geplande moment; de run wordt maandag om 18.00 gepubliceerd.";
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Operations (fase 8)
+// ---------------------------------------------------------------------------
+export async function runContractTestsAction() {
+  await guarded("/beheer/koppelingen", async (user) => {
+    const r = await runContractTests(payments(), createFixtureProvider(), user);
+    const all = [...r.payment, ...r.data];
+    const failed = all.filter((x) => x.status === "FAILED").length;
+    const blocked = all.filter((x) => x.status === "BLOCKED").length;
+    return `Contracttests uitgevoerd: ${all.length - failed - blocked} geslaagd, ${failed} mislukt, ${blocked} geblokkeerd.`;
+  });
+}
+
+export async function acknowledgeAlertAction(formData: FormData) {
+  await guarded("/beheer/bewaking", async (user) => {
+    await acknowledgeAlert(getDb().db, user, { alertId: str(formData, "alertId"), note: str(formData, "note") });
+    return "Melding opgepakt. Hij verdwijnt zodra het signaal weer in orde is.";
+  });
+}
+
+export async function requestCorrectionAction(formData: FormData) {
+  await guarded("/beheer/betalingen", async (user) => {
+    const amount = euroInputToMinor(str(formData, "amount"));
+    if (!amount) throw new FormError("Vul een geldig bedrag in, bijvoorbeeld 2,50.");
+    await requestLedgerCorrection(getDb().db, user, {
+      userId: str(formData, "userId"), amountCents: Number(amount), direction: str(formData, "direction") === "DEBIT" ? "DEBIT" : "CREDIT",
+      breakId: str(formData, "breakId") || null, reason: str(formData, "reason"),
+    });
+    return "Correctie aangevraagd. Na goedkeuring door een tweede persoon kun je hem boeken.";
+  });
+}
+
+export async function executeCorrectionAction(formData: FormData) {
+  await guarded("/beheer/betalingen", async (user) => {
+    const payload = JSON.parse(str(formData, "payload")) as CorrectionPayload;
+    await executeLedgerCorrection(getDb().db, user, { approvalId: str(formData, "approvalId"), payload });
+    return "Correctie geboekt en vastgelegd in de auditlog.";
   });
 }

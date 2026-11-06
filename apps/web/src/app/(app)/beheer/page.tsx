@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { catalogCoverage, getDb } from "@px/db";
+import { catalogCoverage, getDb, listGates } from "@px/db";
 import { Card, PageTitle, Pill } from "@/components/ui";
 import { currentUser, hasPermission } from "@/server/session";
 
@@ -17,13 +17,18 @@ const MODULES: [string, string, string, string | null][] = [
   ["Orders en uitvoeringen", "Uitvoeringen, afwikkeling en handelsinvarianten", "trading.view", "/beheer/handel"],
   ["Uitgifteplanning en toewijzingen", "Drops, prijswijzigingen, trekkingen en wachtlijsten", "issuance.prepare", "/beheer/uitgiftes"],
   ["Waarderingsruns", "Concept, controle, beoordeling en publicatie", "valuation.prepare", "/beheer/waardering"],
+  ["Bewaking", "Signalen met eigenaar, meldingen oppakken", "operations.view", "/beheer/bewaking"],
+  ["Koppelingen en productiegates", "Adapters, capabilityrapport, contracttests en gates", "operations.view", "/beheer/koppelingen"],
 ];
 
-const GATES = ["Juridisch", "Contracten", "Betalen", "Data", "Beeld", "Spelersidentiteit", "Waardering", "Techniek", "Security", "Operations"];
+const GATES: Record<string, string> = {
+  LEGAL: "Juridisch", CONTRACTS: "Contracten", PAYMENTS: "Betalen", DATA: "Data", IMAGERY: "Beeld", PLAYER_IDENTITY: "Spelersidentiteit",
+  VALUATION: "Waardering", ENGINEERING: "Techniek", SECURITY: "Security", OPERATIONS: "Operations",
+};
 
 export default async function AdminPage() {
   const user = (await currentUser())!;
-  const cov = await catalogCoverage(getDb().db);
+  const [cov, gates] = await Promise.all([catalogCoverage(getDb().db), listGates(getDb().db)]);
   const open = cov.perCompetition.reduce((n, c) => n + c.openMarkets, 0);
   const missing = cov.perCompetition.reduce((n, c) => n + c.missingData, 0);
   return (
@@ -57,7 +62,7 @@ export default async function AdminPage() {
       <Card title="Livevoorwaarden (productiegates)">
         <p className="mb-3 text-sm text-muted">Productie is geblokkeerd. Een gate telt alleen met bewijs en goedkeuring door een tweede bevoegde persoon.</p>
         <ul className="flex flex-wrap gap-2">
-          {GATES.map((g) => <li key={g}><Pill tone="red">{g}: open</Pill></li>)}
+          {gates.map((g) => <li key={g.key}><Pill tone={g.satisfied ? "green" : "red"}>{GATES[g.key] ?? g.key}: {g.satisfied ? "vervuld" : "open"}</Pill></li>)}
         </ul>
       </Card>
     </div>

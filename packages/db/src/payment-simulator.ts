@@ -156,7 +156,13 @@ export function createPaymentSimulator(db: Db, opts: SimOptions): PaymentProvide
     },
     holdFunds: ({ idempotencyKey, userAccountRef, amount }) => call("HOLD", idempotencyKey, userAccountRef, amount),
     releaseHold: ({ idempotencyKey, holdReference, amount }) => call("RELEASE", idempotencyKey, holdReference, amount),
-    settleSale: ({ idempotencyKey, buyerAccountRef, gross }) => call("SETTLE", idempotencyKey, buyerAccountRef, gross),
+    async settleSale({ idempotencyKey, buyerAccountRef, gross, sellerNet, platformFee }) {
+      // A provider splits exactly what it is given: the parts must add up to the gross amount.
+      if (![gross, sellerNet, platformFee].every((n) => Number.isSafeInteger(n) && n >= 0) || sellerNet + platformFee !== gross) {
+        return { status: "FAILED", providerReference: null, reason: "Ongeldige verdeling: netto + commissie ≠ bruto", definitive: true } as const;
+      }
+      return call("SETTLE", idempotencyKey, buyerAccountRef, gross);
+    },
     payout: ({ idempotencyKey, userAccountRef, amount }) => call("PAYOUT", idempotencyKey, userAccountRef, amount),
     async queryStatus({ idempotencyKey }) {
       const r = (await db.execute<{ reference: string }>(sql`SELECT reference FROM psp_sim.operations WHERE idempotency_key = ${idempotencyKey}`)).rows[0];

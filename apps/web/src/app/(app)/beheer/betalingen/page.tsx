@@ -1,10 +1,10 @@
-import { getDb, ledgerInvariants, ledgerTotals, listBreaks, listOpenOperations, listReconciliationRuns, type BreakRow } from "@px/db";
+import { correctionTargets, getDb, ledgerInvariants, ledgerTotals, listBreaks, listOpenOperations, listReconciliationRuns, pendingCorrections, type BreakRow } from "@px/db";
 import { Card, DisabledReason, InfoNote, PageTitle, Pill } from "@/components/ui";
 import { Flash } from "@/components/flash";
 import { NotAllowed } from "@/components/login-required";
 import { currentUser, hasPermission } from "@/server/session";
 import { dateTime, euro } from "@/lib/format";
-import { approveResolution, proposeResolution, reconcileNow } from "../actions";
+import { approveResolution, executeCorrectionAction, proposeResolution, reconcileNow, requestCorrectionAction } from "../actions";
 
 export const metadata = { title: "Betalingen en reconciliatie" };
 export const dynamic = "force-dynamic";
@@ -30,7 +30,11 @@ export default async function PaymentsAdminPage({ searchParams }: { searchParams
   if (!canReconcile && !canApprove && !hasPermission(user, "finance.operate")) return <NotAllowed />;
   const sp = await searchParams;
   const { db } = getDb();
-  const [inv, totals, breaks, ops, runs] = await Promise.all([ledgerInvariants(db), ledgerTotals(db), listBreaks(db, { limit: 50 }), listOpenOperations(db), listReconciliationRuns(db, 5)]);
+  const canCorrect = hasPermission(user, "finance.correct");
+  const [inv, totals, breaks, ops, runs, corrections, targets] = await Promise.all([
+    ledgerInvariants(db), ledgerTotals(db), listBreaks(db, { limit: 50 }), listOpenOperations(db), listReconciliationRuns(db, 5),
+    pendingCorrections(db), canCorrect ? correctionTargets(db) : Promise.resolve([]),
+  ]);
   const open = breaks.filter((b) => b.status !== "RESOLVED");
   const closed = breaks.filter((b) => b.status === "RESOLVED").slice(0, 10);
   const invOk = Object.values(inv).every((v) => v === 0);
@@ -82,6 +86,34 @@ export default async function PaymentsAdminPage({ searchParams }: { searchParams
           </details>
         )}
       </Card>
+
+      {canCorrect && (
+        <Card title="Correctieboekingen">
+          <p className="mb-3 text-sm text-muted">Een correctie verplaatst geld tussen een klantsaldo en de verliesrekening van het platform. Hij wordt pas geboekt na goedkeuring door een tweede persoon, precies zoals aangevraagd, en één keer.</p>
+          <form action={requestCorrectionAction} className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <label className="flex min-w-0 flex-col gap-1">Klant<select name="userId" required className="w-full min-w-0 rounded-lg border border-line bg-white px-2 py-2">{targets.map((u) => <option key={u.id} value={u.id}>{u.display_name}</option>)}</select></label>
+            <label className="flex flex-col gap-1">Richting<select name="direction" className="rounded-lg border border-line bg-white px-2 py-2"><option value="CREDIT">Bijschrijven</option><option value="DEBIT">Afschrijven</option></select></label>
+            <label className="flex flex-col gap-1">Bedrag (€)<input name="amount" required inputMode="decimal" placeholder="2,50" className="num rounded-lg border border-line px-2 py-2" /></label>
+            <label className="flex min-w-0 flex-col gap-1">Bij verschil (optioneel)<select name="breakId" className="w-full min-w-0 rounded-lg border border-line bg-white px-2 py-2"><option value="">—</option>{open.map((b) => <option key={b.id} value={b.id}>{KIND[b.kind] ?? b.kind} · {euro(Number(b.difference_cents))}</option>)}</select></label>
+            <label className="flex flex-col gap-1">Reden<input name="reason" required minLength={5} placeholder="Oorzaak" className="rounded-lg border border-line px-2 py-2" /></label>
+            <div className="sm:col-span-2 lg:col-span-5"><button className="rounded-lg border border-slate-300 px-3 py-1.5">Correctie aanvragen</button></div>
+          </form>
+          {corrections.length > 0 && (
+            <ul className="mt-4 divide-y divide-line text-sm">
+              {corrections.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="correction">
+                  <span>{c.payload.direction === "CREDIT" ? "Bijschrijven" : "Afschrijven"} {euro(c.payload.amountCents)} · {c.user_name} · {c.reason}<span className="block text-xs text-muted">aangevraagd door {c.requester}, goedgekeurd door {c.approver}</span></span>
+                  <form action={executeCorrectionAction}>
+                    <input type="hidden" name="approvalId" value={c.id} />
+                    <input type="hidden" name="payload" value={JSON.stringify(c.payload)} />
+                    <button className="rounded-lg bg-primary px-3 py-1.5 font-semibold text-white">Boeken</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <Card title="Openstaande operaties bij de betaalpartner">
         {ops.length === 0 ? <p className="text-sm text-muted">Geen openstaande operaties.</p> : (

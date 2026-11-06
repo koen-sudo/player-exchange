@@ -121,6 +121,10 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-58 | Een waarderingsrun wordt beoordeeld door iemand anders dan de maker (databaseregel) en pas op het geplande moment (maandag 18.00 Europe/Amsterdam) gepubliceerd; in de demo kan dat direct. De waardes van een run liggen vast zodra hij geen concept meer is; een gepubliceerde run blijft gepubliceerd. | BR-08, docs/08 Publicatie, docs/10 gevoelige acties. |
 | R-59 | De worker maakt op maandag vanaf 12.00 één conceptrun per week; er wordt nooit iets zonder goedkeuring gepubliceerd. Een speler zonder nieuwe invoer krijgt geen nieuwe waarde: de vorige blijft zichtbaar met zijn eigen datum. Gestopte spelers houden hun laatste waarde als historisch. | docs/08, BR-22. |
 | R-60 | Demo-wedstrijden en externe transferwaardes staan in de database (seed) zolang er geen dataleverancier is (O-03); de jobs `fixtures.sync` en `external-valuations.check` wachten op die leverancier. | O-03. |
+| R-61 | Contracttests voor adapters zijn code (ADR 0006). Een niet-ondersteunde capability is `BLOCKED` en houdt de bijbehorende geldstroom dicht. Contracttestoperaties hebben sleutels met `contract-test:` en tellen niet mee in de reconciliatie. | docs/07, docs/11 fase 8. |
+| R-62 | De simulator weigert een afwikkeling waarvan netto + commissie niet gelijk is aan bruto, zoals een echte partner moet doen. | Contracteis "Commissie splitsen". |
+| R-63 | Bewaking berekent de signalen uit docs/10 rechtstreeks uit de database, met eigenaar en draaiboek (`docs/runbooks/`). Eén melding per signaal; oppakken vraagt een notitie; sluiten gebeurt automatisch bij herstel. Afgewezen webhooks worden geteld zonder de inhoud te bewaren. | docs/10 Monitoring. |
+| R-64 | Een correctieboeking op een klantsaldo kan alleen na goedkeuring door een tweede persoon, met exact de goedgekeurde inhoud, één keer, tegen de verliesrekening van het platform, en nooit onder nul. | docs/10 gevoelige acties "Financiële correctie". |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 

@@ -18,3 +18,4 @@ export * from "./trading.ts";
 export * from "./drops.ts";
 export * from "./notifications.ts";
 export * from "./valuation.ts";
+export * from "./operations.ts";

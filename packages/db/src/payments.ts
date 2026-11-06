@@ -13,7 +13,8 @@
  *   because an operation is financially processed exactly once.
  * - An unknown outcome is pending, never failure.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { recordWebhookRejection } from "./operations.ts";
 import { sql } from "drizzle-orm";
 import { cents, decideAction, DEFAULT_PAYMENT_LIMITS, DomainError, validateDepositAmount, validateWithdrawalAmount, type UserAction } from "@px/domain";
 import type { PaymentProvider, ProviderOutcome } from "@px/integrations";
@@ -303,7 +304,11 @@ export type WebhookResult = { http: number; result: "PROCESSED" | "DUPLICATE" | 
 
 export async function handlePaymentWebhook(ctx: PaymentsCtx, input: { headers: Record<string, string>; rawBody: string }): Promise<WebhookResult> {
   const v = ctx.provider.verifyWebhook(input);
-  if (!v.valid || !v.eventId) return { http: 401, result: "INVALID_SIGNATURE" };
+  if (!v.valid || !v.eventId) {
+    // Counted for monitoring; the body itself is not kept.
+    await recordWebhookRejection(ctx.db, { provider: ctx.providerName, reason: "signature", bodySha256: createHash("sha256").update(input.rawBody).digest("hex"), bytes: Buffer.byteLength(input.rawBody) });
+    return { http: 401, result: "INVALID_SIGNATURE" };
+  }
   let payload: unknown;
   try {
     payload = JSON.parse(input.rawBody);

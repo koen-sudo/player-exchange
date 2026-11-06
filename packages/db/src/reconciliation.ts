@@ -14,7 +14,7 @@
  */
 import { sql } from "drizzle-orm";
 import { DomainError } from "@px/domain";
-import type { PaymentProvider, ProviderReportLine } from "@px/integrations";
+import { CONTRACT_KEY_PREFIX, type PaymentProvider, type ProviderReportLine } from "@px/integrations";
 import type { Db, Executor } from "./client.ts";
 import { requirePermission, writeAudit, type Identity } from "./identity.ts";
 
@@ -31,7 +31,8 @@ export async function runReconciliation(
 ): Promise<{ runId: string; outcome: "MATCHED" | "BREAKS_FOUND"; findings: number; opened: number; autoClosed: number }> {
   const now = opts.now ?? new Date();
   const grace = opts.graceSeconds ?? 600;
-  const report = await provider.reconciliationReport({ since: new Date(0) });
+  // Contract-test operations are not customer money (R-61).
+  const report = (await provider.reconciliationReport({ since: new Date(0) })).filter((l) => !l.idempotencyKey.startsWith(CONTRACT_KEY_PREFIX));
   const byKey = new Map<string, ProviderReportLine>(report.map((l) => [l.idempotencyKey, l]));
 
   const ops = (await db.execute<{ id: string; type: string; idempotency_key: string; amount_cents: string; status: string; user_id: string | null; processed: boolean }>(sql`

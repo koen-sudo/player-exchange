@@ -46,6 +46,26 @@ export function createFixtureProvider(scenario: FixtureScenario = {}, world: Dem
   const sourceVersion = `fixture-${version}`;
   const squads = buildSquads(world, version, scenario);
   let calls = 0;
+  // One fixture per demo match line; a missing statistic is left out, never zero.
+  const allFixtures = world.players.flatMap((p) =>
+    p.recentMatches.map((m, i) => {
+      const [home, away] = m.fixture.split(" – ");
+      const team = (n: string) => world.teams.find((t) => t.name === n)?.id ?? `extra:${n}`;
+      const stats: Record<string, number> = {};
+      if (m.goals !== null) stats.goals = m.goals;
+      if (m.assists !== null) stats.assists = m.assists;
+      return {
+        competitionId: p.competitionId,
+        externalId: `fx-${p.id}-${i}`,
+        homeTeamExternalId: team(home!),
+        awayTeamExternalId: team(away!),
+        kickoffAt: m.playedAt.toISOString(),
+        status: "FINISHED",
+        stats: { playerExternalId: p.id, minutes: m.minutes, stats, version: 1, asOf: new Date(m.playedAt.getTime() + 3 * 3_600_000).toISOString() },
+      };
+    }),
+  );
+  const fixturesFor = (competitionId: string) => allFixtures.filter((f) => f.competitionId === competitionId).map(({ competitionId: _c, ...f }) => f);
 
   const tick = () => {
     calls++;
@@ -90,13 +110,15 @@ export function createFixtureProvider(scenario: FixtureScenario = {}, world: Dem
       if (partial) list = list.slice(0, Math.max(1, Math.floor(list.length / 2)));
       return page(list, cursor, !partial);
     },
-    async fixtures() {
+    async fixtures(competitionExternalId: string, sinceIso: string, cursor?: string) {
       tick();
-      return { items: [], nextCursor: null, sourceVersion };
+      const since = Date.parse(sinceIso);
+      return page(fixturesFor(competitionExternalId).filter((f) => Date.parse(f.kickoffAt) >= since).map(({ stats: _s, ...f }) => f), cursor, true);
     },
-    async playerMatchStats() {
+    async playerMatchStats(fixtureExternalId: string) {
       tick();
-      return [];
+      const f = allFixtures.find((x) => x.externalId === fixtureExternalId);
+      return f ? [f.stats] : [];
     },
   };
   return provider;

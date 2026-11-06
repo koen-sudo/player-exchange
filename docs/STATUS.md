@@ -1,6 +1,6 @@
 # Projectstatus
 
-Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd.** Volgende fase: 8 (sandbox-integraties en operationele procedures). Niets in deze repository is productiegeschikt.
+Laatst bijgewerkt: 6 november 2026, 17:30. **Fase 0 tot en met 7 zijn opgeleverd. Fase 8 is opgeleverd voor zover dat zonder gekozen leveranciers kan**; de echte sandboxkoppelingen wachten op O-02, O-03 en O-06. Volgende fase: 9 (hardening en cashpilotvoorbereiding). Niets in deze repository is productiegeschikt.
 
 ## Wat de producteigenaar nog moet doen
 
@@ -9,7 +9,30 @@ Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd
 | 1 | Vraag V-02: wireframe van het marktoverzicht meesturen, als die er is | Niets |
 | 2 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
 | 3 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
-| 4 | Een betaalpartner kiezen (O-02) | Fase 8 (sandbox); fase 4 werkt met een simulator |
+| 4 | Een betaalpartner kiezen (O-02) | Acceptatie fase 8 met een echte sandbox; nu bewezen tegen de simulator |
+
+## Fase 8 — Externe integratiesandbox: deels opgeleverd (wacht op leverancierskeuzes)
+
+| Oplevering | Status |
+|---|---|
+| Contractsuite betalen als code: storten, reserveren, interne verkoop met commissiesplitsing, vrijgeven, uitbetalen, status opvragen, webhookverificatie, providerrapport (ADR 0006, R-61) | Klaar |
+| Contractsuite voetbaldata: competities, paginering met compleetheid, stabiele ID's, selecties, wedstrijden, versiegebonden statistieken | Klaar |
+| Niet-ondersteunde capability = `BLOCKED` en de geldstroom blijft dicht | Klaar |
+| Contracttestruns als bewijs bewaard (append-only), zichtbaar in beheer → Koppelingen naast capabilityrapport en gates | Klaar |
+| Contracttestgeld (`contract-test:`) telt niet mee in de reconciliatie | Klaar |
+| Bewaking: 10 signalen uit docs/10 met eigenaar en draaiboek; worker opent/sluit meldingen; oppakken met notitie; afgewezen webhooks geteld (R-63) | Klaar |
+| Correctieboekingen met vier ogen tegen de verliesrekening van het platform, één keer, nooit onder nul (R-64) | Klaar |
+| Draaiboeken in `docs/runbooks/` | Klaar |
+| **Echte sandboxkoppeling betaalpartner** | **Geblokkeerd: O-02** |
+| **Echte dataleverancier** | **Geblokkeerd: O-03** |
+| **Echte identiteitsprovider en contracttest identiteit/notificaties** | **Geblokkeerd: O-06 / notificatieprovider** |
+
+### Acceptatie fase 8
+
+| Criterium | Bewijs |
+|---|---|
+| Deposit, hold, settlement, fee, release en withdrawal daadwerkelijk getest voor de geselecteerde betaalroute | **Alleen tegen de betaalsimulator** (13 controles geslaagd, integratie- en e2e-test). Er is nog geen betaalroute gekozen (O-02); dezelfde suite moet in de sandbox van de partner slagen. Acceptatie dus **niet** vervuld. |
+| Niet-ondersteunde functies worden als blokkade gemeld | Integratietest: adapter zonder uitbetalen en rapport → beide `BLOCKED`, opnames en reconciliatie dicht |
 
 ## Fase 7 — Waardering: opgeleverd
 
@@ -33,15 +56,15 @@ Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd
 
 ## Werkelijk uitgevoerde controles
 
-5 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
+6 november 2026 (Node.js 22.23, PostgreSQL 16.15, Chrome via Playwright 1.64.1).
 
 | Controle | Uitkomst |
 |---|---|
-| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **202 tests geslaagd** (fase 7: +14 waarderingsmodel en -runs) |
-| `pnpm test:db` | **Alle constraintcontroles geslaagd** (fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **208 tests geslaagd** (fase 8: +6 contractsuites, bewaking, correcties) |
+| `pnpm test:db` | **Alle constraintcontroles geslaagd** (incl. fase 8: contracttestbewijs is niet te wijzigen; fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
 | `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces) |
-| `pnpm test:e2e` op verse database (web + worker) | **32 tests geslaagd** (fase 7: +1: run berekenen, beoordelen door een tweede persoon, publiceren; publieke waarde wijzigt pas na publicatie, orders niet) |
-| Schermen fase 4–7 | Betalingen, Transacties, Uitgiftes, Meldingen, spelerpagina en beheer (Betalingen, Handel, Uitgiftes, Waardering) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
+| `pnpm test:e2e` op verse database (web + worker) | **35 tests geslaagd** (fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
+| Schermen fase 4–8 | Bewaking, Koppelingen, Betalingen met correcties (fase 8); Betalingen, Transacties, Uitgiftes, Meldingen, spelerpagina en beheer (Betalingen, Handel, Uitgiftes, Waardering) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |
 
 ## Fase 2 — Catalogus en authenticatie: opgeleverd (met één blokkade)
 
@@ -70,6 +93,8 @@ Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd
 
 ## Eerdere fasen
 
+- **Fase 7** — Waardering: demomodel, conceptrun, beoordeling door een tweede persoon, publicatie op maandag 18.00.
+
 - **Fase 6** — Primaire uitgifte: vier-ogenpublicatie, prijswijziging tot opening, inschrijven met reservering, controleerbare trekking, wachtlijst, levering, meldingen.
 - **Fase 5** — Orders en matching: preview, plaatsen onder locks, prijs-tijdprioriteit, afwikkeling met herstel, annuleren en verlopen.
 - **Fase 4** — Grootboek en betalingsdemo: dubbel boekhouden, geldreserveringen, stortingen en opnames via de betaalsimulator, webhook-inbox, reconciliatie (zie ADR 0005).
@@ -82,9 +107,10 @@ Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd
 
 | Controle | Reden / planning |
 |---|---|
-| Echte provideradapter en contracttests | O-03; fase 8 voor sandbox |
-| Een echte betaalpartner (sandbox), contracttests en capability-rapport | O-02; fase 8 |
-| Correctieboekingen bij een reconciliatieverschil (nu: verklaren en sluiten met twee personen) | Fase 8 (operationele procedures) |
+| Contractsuites tegen een echte dataleverancier | O-03 |
+| Contractsuites en capabilityrapport tegen een echte betaalpartner-sandbox | O-02 |
+| Contracttests identiteit en notificaties | O-06 en keuze notificatieprovider |
+| Externe alerting (telefoon/e-mail) op de bewakingssignalen | Fase 9 / keuze monitoringdienst |
 | Performance bij 10.000 catalogusspelers | Zoekindex staat er; meting in fase 9 |
 
 ## Bekende beperkingen van deze demo
@@ -96,8 +122,8 @@ Laatst bijgewerkt: 6 november 2026, 02:15. **Fase 0 tot en met 7 zijn opgeleverd
 - Zolang een speler nog geen echte transactie heeft, is de "laatste verkoop" een demokoers (R-46).
 - De tegenpartij in de demo is een fictieve verzamelaar met echte reserveringen; er is geen marktmaker of platformhandel (BR-23).
 - De betaalpartner is een simulator in dezelfde database (schema `psp_sim`). Er gaat geen echt geld om en er wordt nergens om betaalgegevens gevraagd.
-- Alles is demo: fictieve spelers en clubs, demomodel `demo-v0`, testgeld, lokale testlogin, placeholder-voorwaarden.
+- Alles is demo: fictieve spelers en clubs, demomodel `demo-v1`, testgeld, lokale testlogin, placeholder-voorwaarden.
 
-## Volgende fase: 8 — Integraties en operatie
+## Volgende fase: 9 — Hardening en cashpilotvoorbereiding
 
-Wat zonder externe keuzes kan: contracttests die elke echte adapter moet doorstaan (betalen, data, identiteit, notificaties), het capability-rapport per adapter in beheer, correctieboekingen met vier ogen, runbooks en monitoring/health-signalen. De echte sandbox-koppelingen wachten op O-02 (betaalpartner), O-03 (dataleverancier) en O-06 (identiteitsprovider).
+Securityreview, belastingtests (o.a. 10.000 catalogusspelers), restoretest van de database, operationele oefeningen met de draaiboeken, productiegates en overdrachtsdocumentatie. Een cashpilot blijft geblokkeerd tot O-02, O-03, O-06 en de juridische gates zijn vervuld.

@@ -160,6 +160,13 @@ export const postings = {
       cr(A("PSP_SETTLEMENT_ASSET"), amount),
     ],
   }),
+  /** Approved correction (four-eyes): money between a customer and the platform's loss account. */
+  correction: (userId: string, approvalId: string, amount: number, direction: "CREDIT" | "DEBIT") => ({
+    eventId: `correction:${approvalId}`, kind: "CORRECTION",
+    lines: direction === "CREDIT"
+      ? [dr(A("PLATFORM_LOSS"), amount), cr(A("CUSTOMER_AVAILABLE", userId), amount)]
+      : [dr(A("CUSTOMER_AVAILABLE", userId), amount), cr(A("PLATFORM_LOSS"), amount)],
+  }),
   /** Primary allocation: the subscription's reserved price goes into settlement. */
   allocationPending: (userId: string, allocationId: string, price: number) => ({
     eventId: `allocation:${allocationId}:pending`, kind: "ALLOCATION_PENDING",

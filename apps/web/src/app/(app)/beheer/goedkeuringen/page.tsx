@@ -29,6 +29,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: SP
     const p = a.payload as Record<string, unknown>;
     if (a.action_type === "PUBLISH_PROGRAMME") return `Editie ${p.seasonKey}, versie ${p.version}: ${p.plannedTotal} kaarten`;
     if (a.action_type === "PUBLISH_DROP") return `${names.get(String(p.playerId)) ?? "Speler"}: ${p.quantity} kaarten à ${euro(Number(p.priceCents))}, inschrijving ${dateTime(String(p.opensAt))} – ${dateTime(String(p.closesAt))}`;
+    if (a.action_type === "LEDGER_CORRECTION") return `${p.direction === "CREDIT" ? "Bijschrijven" : "Afschrijven"} ${euro(Number(p.amountCents))} bij klant ${String(p.userId).slice(0, 8)}…`;
     if (a.action_type === "CHANGE_DROP_PRICE") return `Prijs van ${euro(Number(p.oldPriceCents))} naar ${euro(Number(p.newPriceCents))}`;
     return JSON.stringify(p);
   };
