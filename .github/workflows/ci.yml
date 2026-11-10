@@ -137,9 +137,11 @@ jobs:
           for i in $(seq 1 60); do curl -fs http://localhost:3000/api/v1/health > /dev/null && break; sleep 3; done
           docker logs web | tail -5
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/markt)" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' --user "demo:fout-$GATE" http://localhost:3000/markt)" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' --user "demo:$GATE" http://localhost:3000/markt)" = "200"
-          curl -s --user "demo:$GATE" "http://localhost:3000/api/v1/players?q=Noah" | grep -q "Noah Vermeer"
+          good="Authorization: Basic $(printf 'demo:%s' "$GATE" | base64)"
+          bad="Authorization: Basic $(printf 'demo:%s' "fout" | base64)"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$bad" http://localhost:3000/markt)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$good" http://localhost:3000/markt)" = "200"
+          curl -s -H "$good" "http://localhost:3000/api/v1/players?q=Noah" | grep -q "Noah Vermeer"
           docker run -d --name worker --network host --env-file online.env px-demo bash deploy/start.sh worker
           sleep 20
           docker logs worker 2>&1 | grep -q '"msg":"worker started"'

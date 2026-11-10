@@ -1,3 +1,4 @@
 # Throwaway password for the CI-only demo container (never a real secret);
 # the workflow now reads it from an environment variable.
 40bfb33e98ccd658bc22f8e08b13f415d683082c:.github/workflows/ci.yml:curl-auth-user:135
+a4f10d767e0a13f9138cef62cdc1ef328e5071bd:.github/workflows/ci.yml:curl-auth-user:140
