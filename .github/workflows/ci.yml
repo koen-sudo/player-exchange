@@ -114,11 +114,13 @@ jobs:
       - name: Image voor de online demo bouwen
         run: docker build -t px-demo .
       - name: Starten zoals Railway (https-demo met wachtwoord en eigen geheimen)
+        env:
+          GATE: ci-demo-wachtwoord
         run: |
           cat > online.env <<ENV
           APP_MODE=demo
           DEMO_LOGIN_ENABLED=true
-          DEMO_ACCESS_PASSWORD=ci-demo-wachtwoord
+          DEMO_ACCESS_PASSWORD=$GATE
           DATABASE_URL=postgres://px:px@localhost:5432/px_online
           WEB_BASE_URL=https://demo.example.test
           AUTH_URL=https://demo.example.test
@@ -135,9 +137,9 @@ jobs:
           for i in $(seq 1 60); do curl -fs http://localhost:3000/api/v1/health > /dev/null && break; sleep 3; done
           docker logs web | tail -5
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/markt)" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -u demo:fout http://localhost:3000/markt)" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -u demo:ci-demo-wachtwoord http://localhost:3000/markt)" = "200"
-          curl -s -u demo:ci-demo-wachtwoord "http://localhost:3000/api/v1/players?q=Noah" | grep -q "Noah Vermeer"
+          test "$(curl -s -o /dev/null -w '%{http_code}' --user "demo:fout-$GATE" http://localhost:3000/markt)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' --user "demo:$GATE" http://localhost:3000/markt)" = "200"
+          curl -s --user "demo:$GATE" "http://localhost:3000/api/v1/players?q=Noah" | grep -q "Noah Vermeer"
           docker run -d --name worker --network host --env-file online.env px-demo bash deploy/start.sh worker
           sleep 20
           docker logs worker 2>&1 | grep -q '"msg":"worker started"'
