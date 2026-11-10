@@ -130,6 +130,9 @@ Gemaakt binnen de vastgelegde regels. De producteigenaar kan ieder punt overrule
 | R-67 | Beheerrechten gelden buiten de demo alleen na een login met tweede factor, zoals de identiteitsprovider die meldt (`amr`, RFC 8176). Zonder tweede factor is beheer dicht met uitleg; klantfuncties blijven werken. | docs/10 "Beheerders gebruiken MFA". |
 | R-68 | Productiegates: vervullen alleen via een uitgevoerde goedkeuring van een tweede persoon met exact het bewijs (databasetrigger); niet in een demodatabase. Intrekken mag één persoon, altijd geaudit. Productie start niet met een open gate en pauzeert geldtaken binnen 30 seconden als een gate wordt ingetrokken. | docs/10 Productiegates. |
 | R-69 | Het marktscherm laadt nog de hele catalogus per verzoek. Alleen getest tot p95 186 ms bij één gebruiker en 10.000 spelers; bij 10 gelijktijdige gebruikers 1,4 s. Server-side paginering van het marktscherm is nodig vóór een cashpilot. | Belastingtest fase 9 (docs/perf/). |
+| R-70 | R-69 opgelost (10 november): het marktscherm filtert, sorteert en pagineert in SQL; schermen met een paar spelers laden alleen die spelers. Gemeten p95 527 ms bij 10 gelijktijdige gebruikers. | Belastingtest herhaald. |
+| R-71 | Content-Security-Policy met een nonce per paginaverzoek (`src/proxy.ts`): scripts alleen met die nonce en `'strict-dynamic'`. Alle pagina's renderen daarom per verzoek. | Restpunt F-06. |
+| R-72 | Online demo: één Docker-image voor web en worker op Railway, achter HTTP Basic-authenticatie (`DEMO_ACCESS_PASSWORD`, standaardprotocol). Een https-demo start niet zonder wachtwoord of met de openbare demogeheimen. Alleen de statuscontrole en de webhook (eigen HMAC) zijn uitgezonderd. | Verzoek producteigenaar 10 november; `docs/deploy-demo.md`. |
 
 ## Consistentiecontrole dossier V1.0 + addendum V1.1
 

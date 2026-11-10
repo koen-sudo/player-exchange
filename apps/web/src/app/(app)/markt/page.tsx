@@ -1,26 +1,62 @@
 import Link from "next/link";
-import { listMarket, playerDetail, ROLE_LABELS_NL, type Role } from "@px/demo";
+import { getDb, marketPage, type MarketPageRow } from "@px/db";
+import { cents } from "@px/domain";
+import { MARKET_STATUS_LABELS_NL, playerDetail, ROLE_LABELS_NL, type MarketRow, type Role } from "@px/demo";
 import { marketHref, parseMarketParams } from "@/lib/market-params";
 import { Avatar, Card, Change, DataQualityBadge, EmptyState, Money, PageTitle, Pill } from "@/components/ui";
 import { OrderTicket } from "@/components/order-ticket";
 import { currentUser } from "@/server/session";
-import { loadWorld } from "@/server/world";
+import { loadMarketLists, loadWorld } from "@/server/world";
 
 export const metadata = { title: "Markt" };
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Same row shape and labels as the demo read model (`toMarketRow`). */
+function toRow(r: MarketPageRow): MarketRow {
+  const status = r.market_status as MarketRow["status"];
+  const parts = r.display_name.split(/\s+/);
+  let statusLabel = MARKET_STATUS_LABELS_NL[status] ?? status;
+  if (status === "OPEN" && r.has_upcoming_drop) statusLabel = "Handel · uitgifte gepland";
+  if (r.career_status === "RETIRED") statusLabel = "Gestopt · collectible";
+  const c = (v: string | null) => (v === null ? null : cents(Number(v)));
+  return {
+    playerId: r.player_id,
+    name: r.display_name,
+    initials: ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase(),
+    team: r.team_name ?? "",
+    competition: r.competition_name ?? "",
+    role: r.role ? ROLE_LABELS_NL[r.role as Role] ?? r.role : "",
+    age: r.age ?? 0,
+    reference: c(r.reference_cents),
+    change: c(r.change_cents),
+    bestBid: c(r.best_bid_cents),
+    bestAsk: c(r.best_ask_cents),
+    status,
+    statusLabel,
+    hasUpcomingDrop: r.has_upcoming_drop,
+    dataQuality: r.data_quality as MarketRow["dataQuality"],
+    careerStatus: (r.career_status === "RETIRED" ? "RETIRED" : "ACTIVE") as MarketRow["careerStatus"],
+  };
+}
+
 const withPlayer = (href: string, playerId: string) => `${href}${href.includes("?") ? "&" : "?"}speler=${encodeURIComponent(playerId)}`;
 
 export default async function MarketPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const w = await loadWorld((await currentUser())?.id ?? null);
   const filter = parseMarketParams(sp);
   const user = await currentUser();
-  const result = listMarket(w, { ...filter, watchlist: new Set<string>() });
-  const selectedId = typeof sp.speler === "string" ? sp.speler : undefined;
-  const selected = selectedId ? playerDetail(w, selectedId) : null;
-  const teams = w.teams.filter((t) => !filter.competitionId || t.competitionId === filter.competitionId);
+  // One page of players from the database (R-69); the panel loads only its player.
+  const [result, lists] = await Promise.all([
+    filter.watchlistOnly ? Promise.resolve({ rows: [], total: 0, page: 1, pages: 1, pageSize: 25 }) : marketPage(getDb().db, filter).then((r) => ({ ...r, rows: r.rows.map(toRow) })),
+    loadMarketLists(),
+  ]);
+  const selectedId = typeof sp.speler === "string" && UUID.test(sp.speler) ? sp.speler : undefined;
+  const w = selectedId ? await loadWorld(user?.id ?? null, selectedId) : null;
+  const selected = w && selectedId ? playerDetail(w, selectedId) : null;
+  const teams = lists.teams.filter((t) => !filter.competitionId || t.competitionId === filter.competitionId);
 
   const sortLink = (key: NonNullable<typeof filter.sort>, label: string) => {
     const active = (filter.sort ?? "name") === key;
@@ -47,7 +83,7 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
           <span className="text-xs text-muted">Competitie</span>
           <select name="competitie" defaultValue={filter.competitionId ?? ""} className="mt-1 w-full rounded-lg border border-line px-3 py-2">
             <option value="">Alle competities</option>
-            {w.competitions.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.country})</option>)}
+            {lists.competitions.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.country})</option>)}
           </select>
         </label>
         <label>
@@ -195,7 +231,7 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
                     playerName={selected.name}
                     bestBidMinor={selected.bestBid === null ? null : String(selected.bestBid)}
                     bestAskMinor={selected.bestAsk === null ? null : String(selected.bestAsk)}
-                    freeCards={(user ? w.holdings[user.id] ?? [] : []).filter((c) => c.playerId === selected.playerId && !c.reservedForSale).length}
+                    freeCards={(user && w ? w.holdings[user.id] ?? [] : []).filter((c) => c.playerId === selected.playerId && !c.reservedForSale).length}
                     canTrade={!!user?.canTrade}
                     blockReason={!user ? "Log in om te handelen." : user.tradeBlockReason}
                   />

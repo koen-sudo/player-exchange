@@ -182,7 +182,9 @@ export type InternalPlayerRow = {
   amount_cents: string | null; published_at: string | null; model_version: string | null; is_demo: boolean | null; is_historical: boolean | null;
 };
 
-export async function listAllPlayersInternal(db: Executor): Promise<InternalPlayerRow[]> {
+/** All players, or only `playerIds` (a screen that shows a few players reads only those). */
+export async function listAllPlayersInternal(db: Executor, playerIds?: string[]): Promise<InternalPlayerRow[]> {
+  const only = playerIds ? sql`WHERE p.id = ANY(${`{${playerIds.filter((i) => UUID.test(i)).join(",")}}`}::uuid[])` : sql``;
   const res = await db.execute<InternalPlayerRow>(sql`
     WITH cur AS (
       SELECT DISTINCT ON (m.player_id) m.player_id, m.team_id FROM player_team_memberships m
@@ -208,6 +210,7 @@ export async function listAllPlayersInternal(db: Executor): Promise<InternalPlay
       LEFT JOIN role ON role.player_id = p.id
       LEFT JOIN player_markets pm ON pm.player_id = p.id
       LEFT JOIN public_reference_values prv ON prv.player_id = p.id
+     ${only}
      ORDER BY p.display_name, p.id
      LIMIT 20000`);
   return res.rows;

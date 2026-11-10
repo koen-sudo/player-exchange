@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// Every page renders per request: the CSP nonce (src/proxy.ts) is set per request.
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#142C3C" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

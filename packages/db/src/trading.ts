@@ -561,8 +561,8 @@ export async function marketsToMatch(db: Executor): Promise<string[]> {
 export type BookLevelRow = { player_id: string; side: "BUY" | "SELL"; price: string; quantity: number };
 
 /** Aggregated open orders per player and price; never identities (BR-17). */
-export async function orderBookLevels(db: Executor, playerId?: string): Promise<BookLevelRow[]> {
-  const filter = playerId ? sql`AND pm.player_id = ${playerId}` : sql``;
+export async function orderBookLevels(db: Executor, playerId?: string | string[]): Promise<BookLevelRow[]> {
+  const filter = Array.isArray(playerId) ? sql`AND pm.player_id = ANY(${`{${playerId.join(",")}}`}::uuid[])` : playerId ? sql`AND pm.player_id = ${playerId}` : sql``;
   return (await db.execute<BookLevelRow>(sql`
     SELECT pm.player_id, o.side::text AS side, o.limit_price_cents AS price, sum(o.qty_open)::int AS quantity
       FROM orders o JOIN player_markets pm ON pm.id = o.player_market_id
@@ -571,11 +571,12 @@ export async function orderBookLevels(db: Executor, playerId?: string): Promise<
      ORDER BY pm.player_id, o.side, CASE WHEN o.side = 'BUY' THEN -o.limit_price_cents ELSE o.limit_price_cents END`)).rows;
 }
 
-export async function lastTrades(db: Executor): Promise<Map<string, { price: number; at: Date }>> {
+export async function lastTrades(db: Executor, playerIds?: string[]): Promise<Map<string, { price: number; at: Date }>> {
   const r = await db.execute<{ player_id: string; price_cents: string; settled_at: string }>(sql`
     SELECT DISTINCT ON (pm.player_id) pm.player_id, x.price_cents, x.settled_at::text
       FROM executions x JOIN player_markets pm ON pm.id = x.player_market_id
-     WHERE x.status = 'SETTLED' ORDER BY pm.player_id, x.settled_at DESC`);
+     WHERE x.status = 'SETTLED' ${playerIds ? sql`AND pm.player_id = ANY(${`{${playerIds.join(",")}}`}::uuid[])` : sql``}
+     ORDER BY pm.player_id, x.settled_at DESC`);
   return new Map(r.rows.map((x) => [x.player_id, { price: Number(x.price_cents), at: new Date(x.settled_at) }]));
 }
 

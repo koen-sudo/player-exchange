@@ -14,17 +14,25 @@
 import "server-only";
 import { cache } from "react";
 import { cents, seasonKeyFor } from "@px/domain";
-import { balancesFor, getDb, holdingsFor, lastTrades, listDropsForUser, publishedReferenceHistory, recentMatches, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
+import { balancesFor, getDb, holdingsFor, listCompetitions, listTeams, lastTrades, listDropsForUser, publishedReferenceHistory, recentMatches, listAllPlayersInternal, orderBookLevels, ordersForUser, supplyFor } from "@px/db";
 import { demoWorld, type DemoSubscription, type DemoWorld, type Drop, type Player, type Role } from "@px/demo";
 
 const ROLES = new Set<Role>(["GOALKEEPER", "CENTRE_BACK", "FULL_BACK", "DEFENSIVE_MIDFIELDER", "CENTRAL_MIDFIELDER", "WINGER", "STRIKER"]);
 
-export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld> => {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `onlyPlayers`: comma-separated player ids. Screens that show a few players
+ * (the market page's rows and panel, a player profile) load only those, so a
+ * request does not read the whole catalogue (R-69). Without it: everything.
+ */
+export const loadWorld = cache(async (userId: string | null, onlyPlayers?: string): Promise<DemoWorld> => {
   const overlay = demoWorld();
   const { db } = getDb();
   const season = seasonKeyFor(new Date());
-  const [rows, supply, levels, trades, dropRows] = await Promise.all([listAllPlayersInternal(db), supplyFor(db, season), orderBookLevels(db), lastTrades(db), listDropsForUser(db, userId)]);
-  const [history, matches] = await Promise.all([publishedReferenceHistory(db), recentMatches(db)]);
+  const ids = onlyPlayers === undefined ? undefined : onlyPlayers.split(",").filter((i) => UUID.test(i));
+  const [rows, supply, levels, trades, dropRows] = await Promise.all([listAllPlayersInternal(db, ids), supplyFor(db, season, ids), orderBookLevels(db, ids), lastTrades(db, ids), listDropsForUser(db, userId)]);
+  const [history, matches] = await Promise.all([publishedReferenceHistory(db, ids), recentMatches(db, ids)]);
   const DROP_STATUS: Record<string, Drop["status"]> = { PUBLISHED: "PUBLISHED", OPEN: "OPEN", CLOSED: "CLOSED", ALLOCATING: "CLOSED", SETTLING: "CLOSED", COMPLETED: "COMPLETED", CANCELLED: "CANCELLED", POSTPONED: "CANCELLED" };
   const drops: Drop[] = dropRows.map((d) => ({
     id: d.id,
@@ -160,6 +168,9 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
     }));
   }
 
+  // A scoped load still knows every team (a profile names the previous club).
+  if (ids) for (const t of await listTeams(db)) if (!teams.has(t.id)) teams.set(t.id, { id: t.id, name: t.name, competitionId: t.competitionId });
+
   return {
     ...overlay,
     competitions: [...competitions.values()].sort((a, b) => overlay.competitions.findIndex((c) => c.name === a.name) - overlay.competitions.findIndex((c) => c.name === b.name)),
@@ -170,5 +181,21 @@ export const loadWorld = cache(async (userId: string | null): Promise<DemoWorld>
     balances,
     drops,
     subscriptions,
+  };
+});
+
+/** Filter lists for the market screen, without loading players. */
+export const loadMarketLists = cache(async () => {
+  const overlay = demoWorld();
+  const { db } = getDb();
+  const [comps, teams] = await Promise.all([listCompetitions(db), listTeams(db)]);
+  const countryName = new Map(overlay.competitions.map((c) => [c.countryCode, c.country]));
+  const order = (name: string) => {
+    const i = overlay.competitions.findIndex((c) => c.name === name);
+    return i < 0 ? 999 : i;
+  };
+  return {
+    competitions: comps.map((c) => ({ id: c.id, name: c.name, country: countryName.get(c.countryCode) ?? c.countryCode, countryCode: c.countryCode })).sort((a, b) => order(a.name) - order(b.name) || a.name.localeCompare(b.name, "nl")),
+    teams: teams.map((t) => ({ id: t.id, name: t.name, competitionId: t.competitionId })).sort((a, b) => a.name.localeCompare(b.name, "nl")),
   };
 });

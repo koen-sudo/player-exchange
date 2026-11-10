@@ -102,6 +102,17 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     if (cfg.dropSeedKey.toLowerCase() === DEMO_DROP_SEED_KEY) problems.push("DROP_SEED_KEY is de demosleutel en niet toegestaan in productie");
   }
 
+  // An online demo (reachable over https) is behind a password and does not
+  // use the publicly known demo secrets from .env.example.
+  const access = env.DEMO_ACCESS_PASSWORD;
+  if (access !== undefined && access.length < 12) problems.push("DEMO_ACCESS_PASSWORD moet minimaal 12 tekens zijn");
+  if (cfg.mode === "demo" && cfg.webBaseUrl.startsWith("https://")) {
+    if (!access) problems.push("een online demo (https) vereist DEMO_ACCESS_PASSWORD");
+    if (cfg.authSecret === "change-me-in-local-env" || cfg.authSecret.length < 32) problems.push("AUTH_SECRET is te zwak voor een online demo");
+    if (cfg.paymentWebhookSecret.startsWith("demo-") || cfg.paymentWebhookSecret.length < 32) problems.push("PAYMENT_WEBHOOK_SECRET is te zwak voor een online demo");
+    if (cfg.dropSeedKey.toLowerCase() === DEMO_DROP_SEED_KEY) problems.push("DROP_SEED_KEY is de openbare demosleutel; kies een eigen sleutel voor een online demo");
+  }
+
   if (problems.length) throw new ConfigError(problems);
   return cfg;
 }

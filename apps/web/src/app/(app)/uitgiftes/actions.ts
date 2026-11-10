@@ -1,5 +1,6 @@
 "use server";
 
+import { asDomainError, userMessageFor } from "@/server/errors";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { DomainError } from "@px/domain";
@@ -24,7 +25,8 @@ export async function subscribeAction(dropId: string, requestKey: string): Promi
       ? { ok: true, message: "Je bent ingeschreven. Het bedrag is gereserveerd; je betaalt alleen als je een kaart krijgt. Na sluiting volgt de toewijzing." }
       : { ok: true, message: "Je inschrijving wordt nog bevestigd." };
   } catch (e) {
-    if (e instanceof DomainError) return { ok: false, message: e.userMessage };
+    const d = asDomainError(e);
+    if (d) return { ok: false, message: d.userMessage };
     console.error(JSON.stringify({ level: "error", msg: "subscribe failed", error: String(e) }));
     return { ok: false, message: "Er ging iets mis. Er is niets gereserveerd." };
   }
@@ -40,7 +42,7 @@ export async function cancelSubscriptionAction(formData: FormData) {
     await cancelSubscription(payments(), user.id, String(formData.get("subscriptionId") ?? ""));
     note = `melding=${encodeURIComponent("Je bent afgemeld. De reservering is vrijgegeven.")}`;
   } catch (e) {
-    note = `fout=${encodeURIComponent(e instanceof DomainError ? e.userMessage : "Er ging iets mis. Er is niets gewijzigd.")}`;
+    note = `fout=${encodeURIComponent(userMessageFor(e, "drop action failed"))}`;
   }
   revalidatePath("/uitgiftes");
   redirect(`${safe}${safe.includes("?") ? "&" : "?"}${note}`);

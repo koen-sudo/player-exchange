@@ -18,6 +18,7 @@ import os from "node:os";
 import { sql } from "drizzle-orm";
 import { createDb } from "../src/client.ts";
 import { listCatalogPlayers } from "../src/catalog-read.ts";
+import { marketPage } from "../src/market-read.ts";
 import { book, ledgerInvariants, postings } from "../src/ledger.ts";
 import { inventoryInvariants } from "../src/inventory.ts";
 import { createPaymentSimulator } from "../src/payment-simulator.ts";
@@ -108,6 +109,21 @@ try {
     market["pagina 1–20 via cursor"] = summary(xs);
   }
   report.marketQueryMs = market;
+  // The market screen's own query (R-69): filter, sort and page in SQL.
+  const screen: Record<string, unknown> = {};
+  const screenCases: Record<string, Parameters<typeof marketPage>[1]> = {
+    "marktscherm, standaard": {},
+    "marktscherm, zoeken": { q: "vis" },
+    "marktscherm, sorteren op referentie": { sort: "reference", dir: "desc" },
+    "marktscherm, verhandelbaar, pagina 5": { status: "TRADABLE", page: 5 },
+  };
+  for (const [name, f] of Object.entries(screenCases)) {
+    for (let i = 0; i < 5; i++) await marketPage(db, f);
+    const xs: number[] = [];
+    for (let i = 0; i < 100; i++) xs.push((await timed(() => marketPage(db, f)))[0]);
+    screen[name] = summary(xs);
+  }
+  report.marketScreenQueryMs = screen;
 
   // ------------------------------------------------------ test market + traders
   const playerId = randomUUID();

@@ -11,9 +11,11 @@ type Props = { params: Promise<{ playerId: string }>; searchParams: Promise<Reco
 
 export async function generateMetadata({ params }: Props) {
   const { playerId } = await params;
-  const d = playerDetail(await loadWorld(null), playerId);
+  const d = UUID.test(playerId) ? playerDetail(await loadWorld(null, playerId), playerId) : null;
   return { title: d ? d.name : "Speler niet gevonden" };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const TABS = [
   ["overzicht", "Overzicht"],
@@ -25,7 +27,8 @@ const TABS = [
 export default async function PlayerPage({ params, searchParams }: Props) {
   const { playerId } = await params;
   const { tab = "overzicht" } = await searchParams;
-  const w = await loadWorld((await currentUser())?.id ?? null);
+  if (!UUID.test(playerId)) notFound();
+  const w = await loadWorld((await currentUser())?.id ?? null, playerId);
   const d = playerDetail(w, playerId);
   if (!d) notFound();
   const user = await currentUser();

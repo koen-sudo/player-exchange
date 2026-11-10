@@ -36,6 +36,7 @@ Inloggen in de demo gaat via **Inloggen** met een van de fictieve testaccounts:
 | Typecheck en build | `pnpm typecheck && pnpm build` |
 | End-to-end (Playwright; `pnpm dev` of web + worker moeten draaien) | `pnpm test:e2e` |
 | Hersteloefening (dump, terugzetten, vergelijken) | `pnpm ops:restore-check` |
+| Online demo achter een wachtwoord (Railway) | zie `docs/deploy-demo.md` |
 | Belastingtest (10.000 spelers, 100 gelijktijdige orders) | `pnpm perf:load` |
 
 ## Uitvoeringsmodi

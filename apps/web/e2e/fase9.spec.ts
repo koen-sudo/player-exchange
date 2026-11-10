@@ -16,6 +16,9 @@ test("pages carry the security headers", async ({ request }) => {
   const h = res.headers();
   expect(h["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(h["content-security-policy"]).toContain("object-src 'none'");
+  // Scripts only with this response's nonce; no blanket inline permission.
+  expect(h["content-security-policy"]).toMatch(/script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'/);
+  expect(h["content-security-policy"]).not.toContain("script-src 'self' 'unsafe-inline'");
   expect(h["x-frame-options"]).toBe("DENY");
   expect(h["x-content-type-options"]).toBe("nosniff");
   expect(h["strict-transport-security"]).toContain("max-age=");
@@ -67,4 +70,15 @@ test("a person can download their own data", async ({ page }) => {
   const data = JSON.parse(await (await import("node:fs/promises")).readFile((await download.path())!, "utf8"));
   expect(data.profile.display_name).toBe("Anna de Vries");
   expect(Array.isArray(data.cards)).toBe(true);
+});
+
+test("the market screen pages and sorts in the database", async ({ page }) => {
+  await page.goto("/markt?sort=reference&richting=desc");
+  const values = await page.locator("table tbody tr td:nth-child(2)").allInnerTexts();
+  const cents = values.map((v) => v.replace(/[^0-9,]/g, "").replace(",", ".")).filter(Boolean).map(Number);
+  expect(cents.length).toBeGreaterThan(5);
+  expect(cents).toEqual([...cents].sort((a, b) => b - a));
+  await expect(page.getByText(/Pagina 1 van \d+/)).toBeVisible();
+  await page.getByRole("link", { name: "Volgende" }).click();
+  await expect(page.getByText(/Pagina 2 van \d+/)).toBeVisible();
 });

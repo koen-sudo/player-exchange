@@ -92,13 +92,13 @@ describe("valuation runs (docs/08, BR-08)", () => {
   });
 
   it("the weekly job prepares one draft on Monday afternoon and publishes only approved, due runs", async () => {
-    const monday = new Date("2026-11-16T12:30:00Z"); // 13:30 Amsterdam
+    const monday = new Date("2027-03-15T12:30:00Z"); // 13:30 Amsterdam; far from the seeded runs, whatever today is
     const a = await valuationCycle(t.db, "demo", monday);
     const b = await valuationCycle(t.db, "demo", monday);
     assert.deepEqual([a.created, b.created], [true, false]);
-    const tuesday = await valuationCycle(t.db, "demo", new Date("2026-11-17T12:30:00Z"));
+    const tuesday = await valuationCycle(t.db, "demo", new Date("2027-03-16T12:30:00Z"));
     assert.equal(tuesday.created, false);
-    const drafts = (await t.db.execute<{ status: string }>(sql`SELECT status::text FROM valuation_runs WHERE scheduled_publish_at = '2026-11-16T17:00:00Z'`)).rows;
+    const drafts = (await t.db.execute<{ status: string }>(sql`SELECT status::text FROM valuation_runs WHERE scheduled_publish_at = '2027-03-15T17:00:00Z'`)).rows;
     assert.deepEqual(drafts.map((d) => d.status), ["VALIDATED"], "waits for review; nothing published by itself");
   });
 });

@@ -198,12 +198,13 @@ export async function runChanges(db: Executor, runId: string, limit = 25) {
 }
 
 /** For the change column: per player the latest and the one before (published runs only). */
-export async function publishedReferenceHistory(db: Executor): Promise<Map<string, { previous: number | null; explanations: { title: string; detail: string }[]; confidence: string; informationAsOf: string }>> {
+export async function publishedReferenceHistory(db: Executor, playerIds?: string[]): Promise<Map<string, { previous: number | null; explanations: { title: string; detail: string }[]; confidence: string; informationAsOf: string }>> {
   const r = await db.execute<{ player_id: string; amount_cents: string; explanations: { title: string; detail: string }[]; confidence: string; information_as_of: string; rn: number }>(sql`
     SELECT * FROM (
       SELECT v.player_id, v.amount_cents, v.explanations, v.confidence, vr.information_as_of::text,
              row_number() OVER (PARTITION BY v.player_id ORDER BY vr.published_at DESC)::int AS rn
         FROM player_reference_values v JOIN valuation_runs vr ON vr.id = v.run_id AND vr.status = 'PUBLISHED'
+       ${playerIds ? sql`WHERE v.player_id = ANY(${`{${playerIds.join(",")}}`}::uuid[])` : sql``}
     ) x WHERE rn <= 2`);
   const out = new Map<string, { previous: number | null; explanations: { title: string; detail: string }[]; confidence: string; informationAsOf: string }>();
   for (const row of r.rows.filter((x) => x.rn === 1)) out.set(row.player_id, { previous: null, explanations: row.explanations, confidence: row.confidence, informationAsOf: row.information_as_of });

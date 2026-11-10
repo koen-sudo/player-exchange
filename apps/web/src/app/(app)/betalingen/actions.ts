@@ -5,6 +5,7 @@
  * amount is parsed and checked on the server; the form's request key makes a
  * double submit harmless.
  */
+import { asDomainError } from "@/server/errors";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { DomainError, parseEuroInput } from "@px/domain";
@@ -16,7 +17,8 @@ import { depositReturnUrl, payments } from "@/server/payments";
 
 const back = (q: Record<string, string>) => `/betalingen?${new URLSearchParams(q).toString()}`;
 const messageOf = (e: unknown) => {
-  if (e instanceof DomainError) return e.userMessage;
+  const d = asDomainError(e);
+  if (d) return d.userMessage;
   console.error(JSON.stringify({ level: "error", msg: "payment action failed", error: String(e) }));
   return "Er ging iets mis. Er is niets afgeschreven of bijgeschreven.";
 };

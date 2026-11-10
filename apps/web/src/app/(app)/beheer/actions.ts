@@ -5,6 +5,7 @@
  * re-checks the permission inside the database function (never trusting the
  * form). Results are reported through the URL so a reload never repeats them.
  */
+import { userMessageFor } from "@/server/errors";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -33,8 +34,7 @@ import {
 class FormError extends Error {}
 
 function fail(path: string, e: unknown): never {
-  const msg = e instanceof FormError ? e.message : e instanceof DomainError ? e.userMessage : "Er ging iets mis. Er is niets gewijzigd.";
-  if (!(e instanceof DomainError) && !(e instanceof FormError)) console.error(JSON.stringify({ level: "error", msg: "admin action failed", error: String(e) }));
+  const msg = e instanceof FormError ? e.message : userMessageFor(e, "admin action failed");
   redirect(`${path}${path.includes("?") ? "&" : "?"}fout=${encodeURIComponent(msg)}`);
 }
 

@@ -21,12 +21,12 @@ Datum: 6 november 2026. Uitgevoerd door: de bouwer (Claude), op de code in deze 
 | F-03 | Hoog | Deadlock in het grootboek bij gelijktijdige boekingen op dezelfde platformrekening. Geld bleef juist (transactie teruggedraaid), maar orders en betalingen faalden onder belasting. | **Opgelost** (ADR 0007) | Regressietest faalt zonder fix, slaagt met fix; belastingtest 100/100 geaccepteerd |
 | F-04 | Hoog | Productiegates niet door de server afgedwongen: de opstartcontrole bestond alleen als commentaar; een gate kon direct in de database op "vervuld" worden gezet. | **Opgelost** (R-68) | `hardening.test.ts`, e2e fase 9 |
 | F-05 | Middel | Correctieboeking legde altijd omgeving `demo` vast, ook in productie. | **Opgelost** | `operations.test.ts` |
-| F-06 | Middel | Geen Content-Security-Policy, HSTS of Permissions-Policy. | **Opgelost**; rest-risico laag: scripts nog met `'unsafe-inline'` | e2e fase 9 (headers) |
+| F-06 | Middel | Geen Content-Security-Policy, HSTS of Permissions-Policy. | **Opgelost**; sinds 10 november scripts alleen met een nonce per verzoek (`'strict-dynamic'`, geen `'unsafe-inline'`) | e2e fase 9 (headers), geen consolefouten op 390/768/1440 |
 | F-07 | Middel | Webhook-endpoint las onbegrensd grote berichten. | **Opgelost** (max. 64 KB, 413) | e2e fase 9 |
 | F-08 | Middel | Bewaartermijn ruwe importdata (R-24) niet uitgevoerd. | **Opgelost** (dagelijks via worker) | `hardening.test.ts` |
 | F-09 | Middel | Nieuwe klanten kregen nooit een uitbetaalrekening: opnemen was onmogelijk. | **Opgelost** (R-66) | `scenarios.test.ts` scenario A |
-| F-10 | Middel | Marktscherm laadt de hele catalogus per verzoek; gevoelig voor overbelasting. | **Open** (R-69), vóór cashpilot | `docs/perf/2026-11-06.md` |
-| F-11 | Laag | Een ongeldige ID in sommige formulieren geeft een algemene foutmelding (500) in plaats van een validatiefout. Geen gegevenslek. | Open | — |
+| F-10 | Middel | Marktscherm laadt de hele catalogus per verzoek; gevoelig voor overbelasting. | **Opgelost** 10 november (R-69): pagina in SQL, p95 527 ms bij 10 gelijktijdige gebruikers | `market-read.test.ts`, e2e, `docs/perf/2026-11-06.md` |
+| F-11 | Laag | Een ongeldige ID in sommige formulieren geeft een algemene foutmelding (500) in plaats van een validatiefout. Geen gegevenslek. | **Opgelost** 10 november: ongeldige invoer wordt `INPUT_INVALID` (400) met een nette melding, op één plek afgehandeld | `apps/web/test/errors.test.ts` |
 | F-12 | Laag | Vaste rate-limitvensters staan aan de venstergrens kort tot twee keer de limiet toe. | Aanvaard | ADR 0007 |
 
 Geen kritieke bevindingen. Alle hoge bevindingen zijn opgelost in code; F-02 moet nog met de echte identiteitsprovider worden aangetoond.

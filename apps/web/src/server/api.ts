@@ -4,6 +4,7 @@
  * stay in server logs.
  */
 import "server-only";
+import { asDomainError } from "./errors";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { DomainError, USER_MESSAGES_NL, type ErrorCode } from "@px/domain";
@@ -24,6 +25,7 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   CARD_UNAVAILABLE: 409,
   SELF_TRADE_REJECTED: 409,
   RATE_LIMITED: 429,
+  INPUT_INVALID: 400,
 };
 
 export function apiError(code: ErrorCode, requestId = randomUUID(), logDetail?: unknown) {
@@ -33,9 +35,8 @@ export function apiError(code: ErrorCode, requestId = randomUUID(), logDetail?: 
 
 /** Map a thrown error to the API catalogue; unknown errors never leak details. */
 export function apiFromError(e: unknown, requestId = randomUUID()) {
-  if (e instanceof DomainError) {
-    return NextResponse.json({ requestId, code: e.code, message: e.userMessage }, { status: STATUS[e.code] ?? 422 });
-  }
+  const d = asDomainError(e);
+  if (d) return NextResponse.json({ requestId, code: d.code, message: d.userMessage }, { status: STATUS[d.code] ?? 422 });
   console.error(JSON.stringify({ requestId, level: "error", error: String(e) }));
   return NextResponse.json({ requestId, code: "INTERNAL", message: "Er ging iets mis. Er is niets gewijzigd." }, { status: 500 });
 }

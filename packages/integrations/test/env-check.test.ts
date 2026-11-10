@@ -51,6 +51,14 @@ describe("mode guard (AT-35)", () => {
     );
   });
 
+  it("an online demo (https) needs a password and its own secrets", () => {
+    const online = { ...demoEnv, WEB_BASE_URL: "https://demo.example.com" };
+    assert.throws(() => loadConfig(online), (e: unknown) => e instanceof ConfigError && ["DEMO_ACCESS_PASSWORD", "AUTH_SECRET", "PAYMENT_WEBHOOK_SECRET", "DROP_SEED_KEY"].every((k) => e.problems.some((p) => p.includes(k))));
+    assert.throws(() => loadConfig({ ...demoEnv, DEMO_ACCESS_PASSWORD: "kort" }), (e: unknown) => e instanceof ConfigError && e.problems.some((p) => p.includes("12 tekens")));
+    const ok = loadConfig({ ...online, DEMO_ACCESS_PASSWORD: "een-lang-wachtwoord", AUTH_SECRET: "a".repeat(40), PAYMENT_WEBHOOK_SECRET: "w".repeat(40), DROP_SEED_KEY: "ab".repeat(32) });
+    assert.equal(isDemoLoginAllowed(ok), true, "the demo login stays available behind the password");
+  });
+
   it("unknown mode is refused", () => {
     assert.throws(() => loadConfig({ ...demoEnv, APP_MODE: "prod" }), ConfigError);
   });

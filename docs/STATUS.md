@@ -1,6 +1,6 @@
 # Projectstatus
 
-Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd**, fase 8 zonder echte leveranciers (wacht op O-02, O-03, O-06). Er volgt geen bouwfase meer; wat nog nodig is voor een cashpilot staat onder "Voor een cashpilot". Niets in deze repository is productiegeschikt; de demo is niet cashklaar.
+Laatst bijgewerkt: 10 november 2026, 15:30. **Fase 0 tot en met 9 zijn opgeleverd**, fase 8 zonder echte leveranciers (wacht op O-02, O-03, O-06). Er volgt geen bouwfase meer; wat nog nodig is voor een cashpilot staat onder "Voor een cashpilot". Niets in deze repository is productiegeschikt; de demo is niet cashklaar.
 
 ## Wat de producteigenaar nog moet doen
 
@@ -10,8 +10,19 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 | 2 | Een dataleverancier kiezen en licentie regelen (O-03) | De echte provideradapter |
 | 3 | Een identiteitsprovider kiezen (O-06) | Echte verificatie |
 | 4 | Een betaalpartner kiezen (O-02) | Acceptatie fase 8 met een echte sandbox; nu bewezen tegen de simulator |
-| 5 | Een hostingpartij kiezen (met point-in-time recovery) | Online demo, sandbox-omgeving, pentest |
+| 5 | Een Railway-account aanmaken voor de online demo (`docs/deploy-demo.md`); later een productiehost met point-in-time recovery | Online demo nu; sandbox-omgeving en pentest later |
 | 6 | Juridische en contractuele voorwaarden (O-01, O-07–O-10) | De gates en dus productie |
+
+## Na fase 9 — 10 november 2026
+
+| Oplevering | Status |
+|---|---|
+| Marktscherm filtert, sorteert en pagineert in SQL; profiel laadt alleen die speler (R-70) | Klaar: `market-read.test.ts`, e2e, belastingtest herhaald |
+| CSP met nonce per verzoek, geen `'unsafe-inline'` voor scripts (R-71) | Klaar: e2e headers, geen consolefouten op 390/768/1440 |
+| Ongeldige invoer geeft `INPUT_INVALID` (400) in plaats van een serverfout (F-11) | Klaar: unit test |
+| Online demo klaargezet: Docker-image, startscript, Railway-configuratie, wachtwoord, weigering zonder wachtwoord of met demogeheimen (R-72, `docs/deploy-demo.md`) | Klaar; lokaal getest zonder Docker (migreren, seeden, wachtwoord, CSP, worker); het image zelf wordt in CI gebouwd en getest. **Online zetten wacht op jouw Railway-account** |
+| Keuzedocument met keuzelijst, vergelijkingen van leveranciers en hosting, vragen voor de jurist | Klaar (Claude-document) |
+| Waarderingstest hing af van de datum van vandaag | Opgelost |
 
 ## Fase 9 — Hardening en cashpilotvoorbereiding: opgeleverd (met open punten)
 
@@ -23,7 +34,7 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 | Productiegates afgedwongen: databasetrigger, opstartweigering web en worker, pauze binnen 30 s bij intrekken; vervullen/intrekken in Beheer → Koppelingen (R-68) | Klaar |
 | Beveiligingsheaders (CSP, HSTS, Permissions-Policy), webhooklimiet 64 KB | Klaar |
 | Deadlock in het grootboek onder gelijktijdigheid gevonden en opgelost (ADR 0007) | Klaar |
-| Belastingtest 10.000 spelers en 100 gelijktijdige orders (`docs/perf/2026-11-06.md`) | Klaar; marktscherm onder gelijktijdige belasting niet gehaald (R-69) |
+| Belastingtest 10.000 spelers en 100 gelijktijdige orders (`docs/perf/2026-11-06.md`) | Klaar; marktscherm sinds 10 november ook bij 10 gelijktijdige gebruikers binnen de norm (p95 527 ms, R-70) |
 | Hersteloefening: dump → terugzetten → vergelijken → invarianten (`pnpm ops:restore-check`, ook in CI) | Klaar |
 | Scenario's A, B en C uit docs/09 als ketentests | Klaar (serverniveau, verificatie gesimuleerd tot O-06) |
 | Operationele oefeningen: afwikkeling blijft open, reconciliatieverschil | Klaar (geautomatiseerd) |
@@ -48,8 +59,7 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 | Betaalpartner (O-02), dataleverancier (O-03), identiteitsprovider (O-06): adapter, contracttests in hun sandbox | Producteigenaar kiest; daarna bouw |
 | Juridisch (O-01), voorwaarden (O-07), fiscaal (O-08), merk/entiteit (O-09), spelersidentiteit (O-10) | Producteigenaar |
 | Hosting met point-in-time recovery; afgeschermde sandbox-omgeving | Producteigenaar kiest; daarna inrichting |
-| Marktscherm server-side pagineren (R-69) | Bouw |
-| CSP met nonces, "overal uitloggen", externe alerting op de bewakingssignalen | Bouw, na hostingkeuze en O-06 |
+| "Overal uitloggen", externe alerting op de bewakingssignalen | Bouw, na O-06 en keuze monitoringdienst |
 | Onafhankelijke penetratietest | Na de sandbox-omgeving |
 | Alle tien gates vervullen met bewijs en een tweede persoon | Producteigenaar en eigenaren |
 
@@ -102,11 +112,11 @@ Laatst bijgewerkt: 6 november 2026, 18:30. **Fase 0 tot en met 9 zijn opgeleverd
 
 | Controle | Uitkomst |
 |---|---|
-| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **225 tests geslaagd** (fase 9: +17: rate limiting, gates, MFA-regel, deadlock-regressie, gegevensexport, bewaartermijn, scenario A/B/C, twee oefeningen) |
+| `pnpm test` (Vitest; unit en integratie op echte PostgreSQL) | **231 tests geslaagd** (10 november: +6: marktpagina in SQL, foutafhandeling, online-democonfiguratie; fase 9: +17: rate limiting, gates, MFA-regel, deadlock-regressie, gegevensexport, bewaartermijn, scenario A/B/C, twee oefeningen) |
 | `pnpm test:db` | **Alle constraintcontroles geslaagd** (incl. fase 8: contracttestbewijs is niet te wijzigen; fase 4: +9: holds, opnames, stortingen, dubbele webhook, dubbel verschil, verschil sluiten door één persoon) |
 | CI (GitHub Actions) | Alle stappen groen, inclusief hersteloefening na e2e en de securityjob |
 | `pnpm typecheck` en `pnpm build` | **Geslaagd** (6 workspaces) |
-| `pnpm test:e2e` op verse database (web + worker) | **41 tests geslaagd** (fase 9: +6: beveiligingsheaders, CSRF, rate limiting, webhooklimiet, gates in de demo, gegevensdownload; fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
+| `pnpm test:e2e` op verse database (web + worker) | **42 tests geslaagd** (10 november: +1: marktscherm sorteert en pagineert; fase 9: +6: beveiligingsheaders, CSRF, rate limiting, webhooklimiet, gates in de demo, gegevensdownload; fase 8: +3: contracttests uitvoeren met 0 mislukt, bewaking met 10 signalen, correctie aanvragen → tweede persoon keurt goed → één keer boeken) |
 | Hersteloefening op de demodatabase (`pnpm ops:restore-check`) | **Geslaagd**: 72 tabellen, 18.862 rijen, geen verschillen, invarianten nul, auditlog blijft beschermd |
 | Belastingtest (`pnpm perf:load`, `perf:http`) | Zie `docs/perf/2026-11-06.md` |
 | Schermen fase 4–9 | Koppelingen met gates en Account met gegevensdownload (fase 9); Bewaking, Koppelingen, Betalingen met correcties (fase 8); Betalingen, Transacties, Uitgiftes, Meldingen, spelerpagina en beheer (Betalingen, Handel, Uitgiftes, Waardering) bekeken op 390, 768 en 1440 px; demo-betaalpagina op 390 px |

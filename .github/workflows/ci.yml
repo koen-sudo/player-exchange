@@ -96,3 +96,55 @@ jobs:
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar xz gitleaks
           ./gitleaks detect --source . --redact --verbose
+
+  demo-image:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: px
+          POSTGRES_PASSWORD: px
+          POSTGRES_DB: px_online
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U px -d px_online" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image voor de online demo bouwen
+        run: docker build -t px-demo .
+      - name: Starten zoals Railway (https-demo met wachtwoord en eigen geheimen)
+        run: |
+          cat > online.env <<ENV
+          APP_MODE=demo
+          DEMO_LOGIN_ENABLED=true
+          DEMO_ACCESS_PASSWORD=ci-demo-wachtwoord
+          DATABASE_URL=postgres://px:px@localhost:5432/px_online
+          WEB_BASE_URL=https://demo.example.test
+          AUTH_URL=https://demo.example.test
+          AUTH_SECRET=$(openssl rand -hex 32)
+          PAYMENT_WEBHOOK_SECRET=$(openssl rand -hex 32)
+          DROP_SEED_KEY=$(openssl rand -hex 32)
+          PAYMENT_PROVIDER=demo
+          IDENTITY_PROVIDER=demo
+          FOOTBALL_DATA_PROVIDER=fixture
+          NOTIFICATION_PROVIDER=demo
+          PORT=3000
+          ENV
+          docker run -d --name web --network host --env-file online.env px-demo bash deploy/start.sh web
+          for i in $(seq 1 60); do curl -fs http://localhost:3000/api/v1/health > /dev/null && break; sleep 3; done
+          docker logs web | tail -5
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/markt)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u demo:fout http://localhost:3000/markt)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u demo:ci-demo-wachtwoord http://localhost:3000/markt)" = "200"
+          curl -s -u demo:ci-demo-wachtwoord "http://localhost:3000/api/v1/players?q=Noah" | grep -q "Noah Vermeer"
+          docker run -d --name worker --network host --env-file online.env px-demo bash deploy/start.sh worker
+          sleep 20
+          docker logs worker 2>&1 | grep -q '"msg":"worker started"'
+      - name: Weigert een online demo zonder wachtwoord
+        run: |
+          grep -v DEMO_ACCESS_PASSWORD online.env > open.env
+          ! docker run --rm --network host --env-file open.env px-demo bash deploy/start.sh web
+      - name: Logs bij falen
+        if: failure()
+        run: docker logs web 2>&1 | tail -50; docker logs worker 2>&1 | tail -30

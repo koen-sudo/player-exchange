@@ -15,8 +15,14 @@ Fase 9 vraagt een securityreview, belastingtests, een hersteltest en operationel
 5. **Beveiligingsheaders**: CSP zonder framing, plugins of base-URL-wijziging; HSTS; Permissions-Policy. Scripts houden `'unsafe-inline'` voor de Next.js-bootstrap; nonces volgen bij de hostingkeuze. Geen `form-action`: de stortingsflow leidt door naar de betaalpagina van de partner.
 6. **Hersteloefening als script** (`packages/db/ops/restore-check.ts`), ook in CI na de end-to-endtests.
 
+## Aanvulling 10 november 2026
+
+7. **Marktscherm in SQL** (R-70): `marketPage` doet filteren, sorteren en pagineren in de database; de schermen laden alleen de spelers die ze tonen.
+8. **CSP met nonce** (R-71) via de Next.js-proxy, met `'strict-dynamic'`; pagina's renderen per verzoek.
+9. **Online demo achter een wachtwoord** (R-72) in dezelfde proxy: HTTP Basic over HTTPS, digest-vergelijking in constante tijd; geen eigen protocol.
+
 ## Gevolgen
 
 - Elke nieuwe gevoelige route roept `guardSensitive(actie, gebruiker)` aan.
 - Een nieuwe gate is een migratie, geen configuratie.
-- Het marktscherm moet vóór de cashpilot server-side pagineren (R-69).
+- Een nieuw scherm met spelerslijsten gebruikt `marketPage` of een `loadWorld` met alleen de getoonde spelers, nooit de hele catalogus.

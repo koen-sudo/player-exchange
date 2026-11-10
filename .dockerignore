@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/.next
+**/.turbo
+apps/web/test-results
+apps/web/playwright-report
+*.log
+.env
+.env.local
